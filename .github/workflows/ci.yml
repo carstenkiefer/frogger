@@ -159,13 +159,15 @@ jobs:
     runs-on: ubuntu-24.04
     container: archlinux:latest
     steps:
+      # git must exist before checkout, otherwise actions/checkout falls back
+      # to a plain download without .git and `git archive` below fails.
+      - name: Install build tools
+        run: pacman -Syu --noconfirm --needed base-devel cargo clang git sudo
       - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           name: packages-amd64
           path: dist
-      - name: Install build tools
-        run: pacman -Syu --noconfirm --needed base-devel cargo clang git sudo
       - name: Build and install the PKGBUILD from this checkout
         run: |
           useradd -m builder
