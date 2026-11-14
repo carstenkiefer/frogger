@@ -127,6 +127,8 @@ The installer finds the PAM module directory of the distribution, creates the
 * **Glasses:** strong reflections of the IR emitter can hide the eyes. If
   enrollment reports that open and closed eyes cannot be told apart, tilt
   the glasses slightly or enroll without them.
+* **Not now?** Look away: when no face is seen for 2 seconds, FROGGER gives
+  up and the password prompt appears.
 * **Diagnosis:** `frogger test` prints similarity and liveness statistics;
   failed attempts are also logged (`journalctl -u frogger`).
 
@@ -147,9 +149,13 @@ The installer finds the PAM module directory of the distribution, creates the
 (`gdm-password`, `gdm-fingerprint`, `gdm-smartcard`) and has no slot for an
 additional face service. FROGGER therefore runs inside `gdm-password` (via
 `common-auth`): select your user / wake the lock screen, look at the camera,
-blink slowly – done. If recognition fails, the password prompt appears. The first
-login after boot always asks for the password so that the GNOME Keyring is
-unlocked (`require_password_for_first_login`).
+blink slowly – done. If recognition fails, the password prompt appears – after
+at most 4 seconds (`auth.service_timeouts`), or after 2 seconds if nobody looks
+at the camera (`auth.no_face_timeout_secs`). The first login after boot always
+asks for the password so that the GNOME Keyring is unlocked
+(`require_password_for_first_login`). An optional GNOME Shell extension that
+runs face recognition *next to* the password field, like the fingerprint
+reader, is planned for 0.3 ([design notes](docs/GNOME-SHELL.md)).
 
 **KDE Plasma.** SDDM and the lock screen use `common-auth` as well. Plasma
 6.3/6.6 starts the PAM conversation of the lock screen when you press Enter on

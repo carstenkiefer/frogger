@@ -16,7 +16,11 @@ warmup_frames = 4
 # emitter = { unit = 14, selector = 6, control = [1, 3, 3, 0, 0, 0, 0, 0, 0] }
 
 [auth]
+# Time budget of one attempt; the password prompt follows when it runs out.
 timeout_secs = 5.0
+# Give up early when no face is seen for this long (nobody looking at the
+# camera), so the password prompt appears quickly. 0 = off.
+no_face_timeout_secs = 2.0
 # Cosine similarity needed for a match (SFace). Higher = stricter.
 similarity_threshold = 0.50
 min_matching_frames = 3
@@ -32,6 +36,16 @@ lockout_secs = 300
 skip_when_lid_closed = true
 # Refuse face auth while the requesting user is also logged in via SSH.
 deny_while_remote_session = true
+
+# Shorter time budgets for display managers and lock screens, where the
+# password field only appears after face authentication gave up. Services
+# not listed here use auth.timeout_secs.
+[auth.service_timeouts]
+gdm-password = 4.0
+sddm = 4.0
+lightdm = 4.0
+plasmalogin = 4.0
+kde = 4.0
 
 [camera.depth]
 # EXPERIMENTAL: depth camera (e.g. Intel RealSense) as additional liveness
