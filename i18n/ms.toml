@@ -46,6 +46,7 @@
 "cli.doctor.policy" = "Dasar: RGB tidak selamat dibenarkan: {rgb}, peranti sensitif: {sensitive}"
 "cli.doctor.models_missing" = "Fail model tiada: {path}"
 "cli.doctor.emitter_dark" = "Imej inframerah hampir hitam: pemancar IR berkemungkinan dimatikan. Konfigurasikannya dengan linux-enable-ir-emitter dan import hasilnya: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy juga aktif dalam konfigurasi PAM ({files}). Dua modul wajah berebut kamera IR dan berjalan satu demi satu – buang Howdy (cth. sudo apt remove howdy) atau lumpuhkan FROGGER."
 "cli.doctor.lid_closed" = "Penutup komputer riba tertutup – kamera tidak dapat melihat anda."
 "cli.doctor.daemon_ok" = "Daemon sedang berjalan (versi {version})."
 "cli.desktop.gnome" = "GNOME: log masuk wajah berfungsi pada skrin log masuk dan skrin kunci (perkhidmatan PAM gdm-password). Pada skrin kunci, tekan sebarang kekunci atau leret ke atas untuk memulakan pengecaman. Log masuk pertama selepas but meminta kata laluan supaya rantai kunci (keyring) dapat dibuka."

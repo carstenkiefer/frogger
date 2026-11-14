@@ -444,6 +444,17 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
         Err(e) => println!("✘ {e:#}"),
     }
     println!("  {}", pam_status_text(lang));
+    let others = other_face_modules();
+    if !others.is_empty() {
+        println!(
+            "(!) {}",
+            tr(
+                lang,
+                "cli.doctor.other_face_module",
+                &[("files", &others.join(", "))]
+            )
+        );
+    }
     let encrypted = call(socket, Op::Status, lang)
         .ok()
         .and_then(|(_, _, d)| d)
@@ -676,6 +687,28 @@ fn pam_enabled() -> bool {
             })
             .unwrap_or(false)
     })
+}
+
+/// PAM files that also load another face-recognition module (Howdy). Two
+/// modules compete for the IR camera and run one after the other.
+fn other_face_modules() -> Vec<String> {
+    let Ok(rd) = std::fs::read_dir("/etc/pam.d") else {
+        return Vec::new();
+    };
+    let mut hits: Vec<String> = rd
+        .flatten()
+        .filter(|e| {
+            std::fs::read_to_string(e.path())
+                .map(|s| {
+                    s.lines()
+                        .any(|l| !l.trim_start().starts_with('#') && l.contains("pam_howdy.so"))
+                })
+                .unwrap_or(false)
+        })
+        .map(|e| e.path().display().to_string())
+        .collect();
+    hits.sort();
+    hits
 }
 
 fn pam_status_text(lang: &str) -> String {

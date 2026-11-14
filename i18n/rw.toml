@@ -47,6 +47,7 @@
 "cli.doctor.policy" = "Amabwiriza: RGB idafite umutekano iremewe: {rgb}, igikoresho kibitse amakuru y'ibanga: {sensitive}"
 "cli.doctor.models_missing" = "Dosiye ya modeli ntiboneka: {path}"
 "cli.doctor.emitter_dark" = "Ishusho ya infrarouge yijimye hafi ya yose: birashoboka ko itara rya IR rizimye. Rishyireho ukoresheje linux-enable-ir-emitter hanyuma winjize ibyavuyemo: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy nayo irakora muri PAM ({files}). Porogaramu ebyiri zimenya isura zirwanira kamera ya IR kandi zikora imwe nyuma y'indi – kuraho Howdy (urugero sudo apt remove howdy) cyangwa uhagarike FROGGER."
 "cli.doctor.lid_closed" = "Mudasobwa igendanwa irafunze – kamera ntishobora kukubona."
 "cli.doctor.daemon_ok" = "Daemon irakora (verisiyo {version})."
 "cli.desktop.gnome" = "GNOME: kwinjira ukoresheje isura bikora kuri ecran yo kwinjira no kuri ecran ifunze (serivisi ya PAM gdm-password). Kuri ecran ifunze, kanda buto iyo ari yo yose cyangwa ukurure hejuru kugira ngo kumenya isura bitangire. Kwinjira bwa mbere nyuma yo gutangiza mudasobwa bisaba ijambo ry'ibanga kugira ngo keyring ifunguke."

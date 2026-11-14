@@ -47,6 +47,7 @@
 "cli.doctor.policy" = "Policy: insecure RGB allowed: {rgb}, sensitive device: {sensitive}"
 "cli.doctor.models_missing" = "Model file missing: {path}"
 "cli.doctor.emitter_dark" = "The infrared image is almost black: the IR emitter is probably switched off. Configure it with linux-enable-ir-emitter and import the result: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy is also active in the PAM configuration ({files}). Two face modules compete for the IR camera and run one after the other – remove Howdy (e.g. sudo apt remove howdy) or disable FROGGER."
 "cli.doctor.lid_closed" = "The laptop lid is closed – the camera cannot see you."
 "cli.doctor.daemon_ok" = "Daemon is running (version {version})."
 "cli.desktop.gnome" = "GNOME: face login works on the login and lock screen (PAM service gdm-password). On the lock screen press a key or swipe up to start recognition. The first login after boot asks for the password so the keyring can be unlocked."

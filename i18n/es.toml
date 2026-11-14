@@ -46,6 +46,7 @@
 "cli.doctor.policy" = "Política: RGB inseguro permitido: {rgb}, dispositivo sensible: {sensitive}"
 "cli.doctor.models_missing" = "Falta el archivo de modelo: {path}"
 "cli.doctor.emitter_dark" = "La imagen infrarroja es casi negra: probablemente el emisor IR está apagado. Configúrelo con linux-enable-ir-emitter e importe el resultado: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy también está activo en la configuración de PAM ({files}). Dos módulos faciales compiten por la cámara IR y se ejecutan uno tras otro: elimine Howdy (p. ej. sudo apt remove howdy) o desactive FROGGER."
 "cli.doctor.lid_closed" = "La tapa del portátil está cerrada – la cámara no puede verle."
 "cli.doctor.daemon_ok" = "El demonio está en ejecución (versión {version})."
 "cli.desktop.gnome" = "GNOME: el inicio de sesión facial funciona en la pantalla de inicio de sesión y en la de bloqueo (servicio PAM gdm-password). En la pantalla de bloqueo, pulse una tecla o deslice hacia arriba para iniciar el reconocimiento. El primer inicio de sesión tras el arranque pide la contraseña para poder desbloquear el depósito de claves."
