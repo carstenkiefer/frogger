@@ -55,9 +55,10 @@ fn run() -> Result<()> {
     let config_path = std::env::var("FROGGER_CONFIG").unwrap_or_else(|_| CONFIG_PATH.into());
     let data_dir = std::env::var("FROGGER_DATA_DIR").unwrap_or_else(|_| DATA_DIR.into());
     let cfg = Config::load(Path::new(&config_path))?;
-    let t = Instant::now();
-    let engine = Engine::load(cfg, Path::new(&data_dir)).context("loading models")?;
-    log::info!("models loaded in {:?}", t.elapsed());
+    let engine = Engine::new(cfg, Path::new(&data_dir)).context("opening face data")?;
+    // Load the models while already accepting connections: policy answers
+    // (e.g. "first login needs the password") must not wait for them.
+    engine.preload_in_background();
     let daemon = Arc::new(Daemon {
         engine: Mutex::new(engine),
         lockouts: Mutex::default(),
@@ -461,7 +462,7 @@ fn authenticate(
 
     let engine = d.engine.lock().unwrap_or_else(|p| p.into_inner());
     let mut emit = |s: String| c.info(s);
-    let outcome = engine.authenticate(user, lang, &mut emit);
+    let outcome = engine.authenticate(user, service, lang, &mut emit);
     drop(engine);
 
     let mut locks = d.lockouts.lock().unwrap_or_else(|p| p.into_inner());

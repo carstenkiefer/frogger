@@ -29,7 +29,8 @@ reported by `frogger doctor`.
 
 Record `best_similarity`, `matching_frames`, `blink_detected`, `eye_samples`,
 `max_eye_dip`, `max_closed_rise` and the time to
-success. Target: ≥ 95 % success within the 5 s budget. If genuine users stay
+success. Target: ≥ 95 % success within the 5 s budget (4 s at display
+managers and lock screens, see `auth.service_timeouts`). If genuine users stay
 below the threshold, re-enroll in the typical working position before
 lowering `auth.similarity_threshold`.
 
@@ -62,6 +63,13 @@ Document any success of a presentation attack as a security issue (see
   Plasma ≥ 6.8: enable the face authenticator, recognition starts on its own.
 * Terminal: `sudo -k true`, `su - <user>`, `pkexec true`.
 * Laptop with closed lid and external monitor: face auth skipped immediately.
+* Wake the lock screen while looking away from the camera: the password
+  prompt must appear after about 2 s (`auth.no_face_timeout_secs`).
+* First login after boot: the password prompt must appear without a
+  noticeable delay (the daemon answers before its models are loaded).
+* Fedora/RHEL with SELinux enforcing: GDM and the lock screen must reach the
+  daemon socket – check `ausearch -m avc -ts recent` for denials mentioning
+  `frogger`.
 
 ## 6. Performance
 

@@ -12,6 +12,7 @@ use anyhow::Result;
 use frogger_i18n::tr;
 use serde::Serialize;
 use std::path::Path;
+use std::sync::{Arc, OnceLock};
 use std::time::{Duration, Instant};
 
 /// Interval between full analyses (detection + embedding); frames in between
@@ -37,6 +38,9 @@ const CLOSED_RECORD: Duration = Duration::from_millis(1000);
 const CLOSED_MARGIN: f32 = 0.05;
 /// V4L2 buffers queued by the camera (see Camera::open).
 const CAMERA_BUFFERS: usize = 4;
+/// Analyses without any face before `auth.no_face_timeout_secs` may end an
+/// attempt (slow CPUs analyse fewer frames in the same time).
+const MIN_ANALYSES_WITHOUT_FACE: u32 = 3;
 /// A depth frame older than this is not used for the current IR frame.
 const DEPTH_MAX_AGE: Duration = Duration::from_millis(150);
 
@@ -59,19 +63,45 @@ pub struct AttemptReport {
 
 pub struct Engine {
     pub cfg: Config,
-    pipeline: Pipeline,
+    /// Loaded on first use or in the background (see `preload_in_background`),
+    /// so the daemon can answer policy decisions – e.g. "first login needs
+    /// the password" – without waiting for the models.
+    models: Arc<OnceLock<std::result::Result<Models, String>>>,
     pub store: Store,
-    model_fp: String,
+}
+
+struct Models {
+    pipeline: Pipeline,
+    fingerprint: String,
+}
+
+fn load_models(m: &crate::config::ModelConfig) -> std::result::Result<Models, String> {
+    let load = || -> Result<Models> {
+        let mut pipeline = Pipeline::load(&m.detector, &m.recognizer)?;
+        pipeline.detector.score_threshold = m.detection_threshold;
+        let fingerprint = store::model_fingerprint(&m.recognizer)?;
+        Ok(Models {
+            pipeline,
+            fingerprint,
+        })
+    };
+    load().map_err(|e| format!("{e:#}"))
 }
 
 /// Callback for user-facing (already translated) progress messages.
 pub type Emit<'a> = &'a mut dyn FnMut(String);
 
 impl Engine {
+    /// Load configuration, key and models (blocking).
     pub fn load(cfg: Config, data_dir: &Path) -> Result<Engine> {
-        let mut pipeline = Pipeline::load(&cfg.models.detector, &cfg.models.recognizer)?;
-        pipeline.detector.score_threshold = cfg.models.detection_threshold;
-        let model_fp = store::model_fingerprint(&cfg.models.recognizer)?;
+        let engine = Engine::new(cfg, data_dir)?;
+        engine.models()?;
+        Ok(engine)
+    }
+
+    /// Set up storage only; the models are loaded on first use or by
+    /// [`Engine::preload_in_background`].
+    pub fn new(cfg: Config, data_dir: &Path) -> Result<Engine> {
         let key = crate::crypto::TemplateKey::from_credentials()?;
         let store = Store::with_key(data_dir, key);
         match store.migrate() {
@@ -89,10 +119,30 @@ impl Engine {
         );
         Ok(Engine {
             cfg,
-            pipeline,
+            models: Arc::new(OnceLock::new()),
             store,
-            model_fp,
         })
+    }
+
+    /// Start loading the models in a background thread. Callers that need
+    /// them earlier wait for this load instead of starting a second one.
+    pub fn preload_in_background(&self) {
+        let cell = self.models.clone();
+        let cfg = self.cfg.models.clone();
+        std::thread::spawn(move || {
+            let t = Instant::now();
+            match cell.get_or_init(|| load_models(&cfg)) {
+                Ok(_) => log::info!("models loaded in {:?}", t.elapsed()),
+                Err(e) => log::error!("loading models: {e}"),
+            }
+        });
+    }
+
+    fn models(&self) -> Result<&Models> {
+        self.models
+            .get_or_init(|| load_models(&self.cfg.models))
+            .as_ref()
+            .map_err(|e| anyhow::anyhow!("loading models: {e}"))
     }
 
     fn open_camera(&self) -> Result<(Camera, CameraKind)> {
@@ -125,9 +175,17 @@ impl Engine {
     }
 
     /// Run one recognition attempt against `template`.
-    pub fn attempt(&self, template: &UserTemplate, lang: &str, emit: Emit) -> Result<AttemptReport> {
+    pub fn attempt(
+        &self,
+        template: &UserTemplate,
+        timeout: Duration,
+        lang: &str,
+        emit: Emit,
+    ) -> Result<AttemptReport> {
         let start = Instant::now();
         let (mut cam, mut kind) = self.open_camera()?;
+        // Wait for a background model load only after the camera started.
+        let models = self.models()?;
         let infrared = template.camera_kind == "infrared";
         if infrared && kind == CameraKind::Unknown {
             kind = CameraKind::Infrared; // verified per frame via chroma
@@ -136,7 +194,10 @@ impl Engine {
         let depth = self.open_depth(&cam)?;
         let mut verifier = Verifier::new(&self.cfg, template, ir);
         let mut strobe = StrobeFilter::default();
-        let timeout = Duration::from_secs_f32(self.cfg.auth.timeout_secs);
+        // Nobody in front of the camera (looking away, walked off, another
+        // screen): give up early so the password prompt appears quickly.
+        let no_face = Duration::from_secs_f32(self.cfg.auth.no_face_timeout_secs);
+        let mut full_analyses = 0u32;
         let mut last_full: Option<(Instant, Analysis)> = None;
         let mut prompted_blink = false;
         let mut success = false;
@@ -166,7 +227,8 @@ impl Engine {
                 .map(|(at, _)| at.elapsed() >= FULL_INTERVAL)
                 .unwrap_or(true);
             let obs = if full_due {
-                let analysis = self.pipeline.analyse(&frame.image)?;
+                let analysis = models.pipeline.analyse(&frame.image)?;
+                full_analyses += 1;
                 last_full = analysis.clone().map(|a| (Instant::now(), a));
                 let depth_verdict = match (&depth, &analysis) {
                     (Some(d), Some(a)) => Some(match d.latest(DEPTH_MAX_AGE) {
@@ -212,6 +274,14 @@ impl Engine {
                 }
                 _ => {}
             }
+            if !no_face.is_zero()
+                && verifier.stats.frames_with_face == 0
+                && full_analyses >= MIN_ANALYSES_WITHOUT_FACE
+                && start.elapsed() >= no_face
+            {
+                log::debug!("no face after {full_analyses} analyses, giving up early");
+                break;
+            }
         }
         if !success {
             log::info!(
@@ -231,7 +301,7 @@ impl Engine {
     }
 
     /// Full authentication flow for PAM (policy checks are done by the caller).
-    pub fn authenticate(&self, user: &str, lang: &str, emit: Emit) -> Outcome {
+    pub fn authenticate(&self, user: &str, service: &str, lang: &str, emit: Emit) -> Outcome {
         let template = match self.usable_template(user) {
             Ok(t) => t,
             Err(o) => return o,
@@ -244,7 +314,8 @@ impl Engine {
         } else {
             emit(tr(lang, "auth.start_ir_only", &[]));
         }
-        match self.attempt(&template, lang, emit) {
+        let timeout = Duration::from_secs_f32(self.cfg.timeout_for(service));
+        match self.attempt(&template, timeout, lang, emit) {
             Ok(r) if r.success => Outcome::Success,
             Ok(r) => Outcome::Failure(tr(
                 lang,
@@ -264,7 +335,10 @@ impl Engine {
             Ok(None) => return Err(Outcome::Unavailable("not enrolled".into())),
             Err(e) => return Err(Outcome::Unavailable(format!("template error: {e:#}"))),
         };
-        if t.model != self.model_fp {
+        let models = self
+            .models()
+            .map_err(|e| Outcome::Unavailable(format!("{e:#}")))?;
+        if t.model != models.fingerprint {
             return Err(Outcome::Unavailable(
                 "template was created with another model; re-enroll".into(),
             ));
@@ -294,7 +368,12 @@ impl Engine {
             Outcome::Success => anyhow::anyhow!("unexpected state"),
         })?;
         emit(tr(lang, "auth.start", &[]));
-        self.attempt(&t, lang, emit)
+        self.attempt(
+            &t,
+            Duration::from_secs_f32(self.cfg.auth.timeout_secs),
+            lang,
+            emit,
+        )
     }
 
     /// Next frame usable for enrollment: lit by the emitter, exactly one face,
@@ -310,7 +389,7 @@ impl Engine {
         if infrared && (frame.chroma >= 2.0 || strobe.is_off(frame.mean)) {
             return None;
         }
-        let a = self.pipeline.analyse(&frame.image).ok()??;
+        let a = self.models().ok()?.pipeline.analyse(&frame.image).ok()??;
         if a.face_count > 1 {
             *multi += 1;
             return None;
@@ -339,6 +418,13 @@ impl Engine {
         lang: &str,
         emit: Emit,
     ) -> Outcome {
+        let fingerprint = match self.models() {
+            Ok(m) => m.fingerprint.as_str(),
+            Err(e) => {
+                log::error!("enroll: {e:#}");
+                return Outcome::Unavailable(tr(lang, "auth.camera_unavailable", &[]));
+            }
+        };
         let (mut cam, _) = match self.open_camera() {
             Ok(c) => c,
             Err(e) => {
@@ -451,11 +537,11 @@ impl Engine {
         // Merge with an existing template from the same model/camera type.
         let now = store::now();
         let mut template = match self.store.load(user) {
-            Ok(Some(t)) if t.model == self.model_fp && t.camera_kind == kind_name(kind) => t,
+            Ok(Some(t)) if t.model == fingerprint && t.camera_kind == kind_name(kind) => t,
             _ => UserTemplate {
                 version: FORMAT_VERSION,
                 user: user.to_string(),
-                model: self.model_fp.clone(),
+                model: fingerprint.to_string(),
                 camera_kind: kind_name(kind).into(),
                 camera_usb_id: cam.info.usb_id.clone(),
                 label: None,
@@ -477,7 +563,8 @@ impl Engine {
         // Phase 3: verify the fresh template with the real challenge.
         std::thread::sleep(Duration::from_millis(500));
         emit(tr(lang, "enroll.verify", &[]));
-        match self.attempt(&template, lang, emit) {
+        let timeout = Duration::from_secs_f32(self.cfg.auth.timeout_secs);
+        match self.attempt(&template, timeout, lang, emit) {
             Ok(r) if r.success => {}
             Ok(r) => {
                 let why = tr(

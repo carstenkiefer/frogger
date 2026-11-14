@@ -4,6 +4,7 @@
 
 use anyhow::{Context, Result};
 use serde::{Deserialize, Serialize};
+use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 
 pub const CONFIG_PATH: &str = "/etc/frogger/config.toml";
@@ -104,6 +105,12 @@ pub struct EmitterControl {
 pub struct AuthConfig {
     /// Total time budget of one authentication attempt.
     pub timeout_secs: f32,
+    /// Shorter budgets for individual PAM services (display managers and
+    /// lock screens, where the password field only appears afterwards).
+    pub service_timeouts: BTreeMap<String, f32>,
+    /// End an attempt early when no face was seen for this long (nobody in
+    /// front of the camera). 0 disables.
+    pub no_face_timeout_secs: f32,
     /// Cosine similarity required for a match (SFace; 0.363 is OpenCV's
     /// equal-error point on LFW, we are deliberately stricter).
     pub similarity_threshold: f32,
@@ -130,6 +137,11 @@ impl Default for AuthConfig {
     fn default() -> Self {
         AuthConfig {
             timeout_secs: 5.0,
+            service_timeouts: ["gdm-password", "sddm", "lightdm", "plasmalogin", "kde"]
+                .into_iter()
+                .map(|s| (s.to_string(), 4.0))
+                .collect(),
+            no_face_timeout_secs: 2.0,
             similarity_threshold: 0.50,
             min_matching_frames: 3,
             services: vec![
@@ -255,6 +267,16 @@ impl Config {
             a.timeout_secs > 0.5 && a.timeout_secs <= 30.0,
             "auth.timeout_secs out of range (0.5..30)"
         );
+        for (service, t) in &a.service_timeouts {
+            anyhow::ensure!(
+                *t > 0.5 && *t <= 30.0,
+                "auth.service_timeouts.{service} out of range (0.5..30)"
+            );
+        }
+        anyhow::ensure!(
+            a.no_face_timeout_secs == 0.0 || (1.0..=30.0).contains(&a.no_face_timeout_secs),
+            "auth.no_face_timeout_secs must be 0 (off) or 1..30"
+        );
         anyhow::ensure!(
             (0.30..=0.95).contains(&a.similarity_threshold),
             "auth.similarity_threshold out of range (0.30..0.95)"
@@ -262,10 +284,6 @@ impl Config {
         anyhow::ensure!(
             a.min_matching_frames >= 1,
             "auth.min_matching_frames must be >= 1"
-        );
-        anyhow::ensure!(
-            (2.0..=40.0).contains(&self.camera.depth.min_relief_mm),
-            "camera.depth.min_relief_mm out of range (2..40)"
         );
         anyhow::ensure!(
             (2.0..=40.0).contains(&self.camera.depth.min_relief_mm),
@@ -295,6 +313,15 @@ impl Config {
 
     pub fn service_allowed(&self, service: &str) -> bool {
         self.auth.services.is_empty() || self.auth.services.iter().any(|s| s == service)
+    }
+
+    /// Time budget of one attempt for `service` (seconds).
+    pub fn timeout_for(&self, service: &str) -> f32 {
+        self.auth
+            .service_timeouts
+            .get(service)
+            .copied()
+            .unwrap_or(self.auth.timeout_secs)
     }
 
     pub fn is_login_service(&self, service: &str) -> bool {
@@ -327,6 +354,22 @@ mod tests {
     #[test]
     fn unknown_keys_rejected() {
         assert!(toml::from_str::<Config>("[auth]\nthreshhold = 0.1\n").is_err());
+    }
+
+    #[test]
+    fn service_timeouts() {
+        let c = Config::default();
+        assert_eq!(c.timeout_for("gdm-password"), 4.0);
+        assert_eq!(c.timeout_for("sudo"), 5.0);
+        let c: Config =
+            toml::from_str("[auth]\ntimeout_secs = 6.0\n[auth.service_timeouts]\nkde = 3.0\n").unwrap();
+        c.validate().unwrap();
+        assert_eq!(c.timeout_for("kde"), 3.0);
+        assert_eq!(c.timeout_for("gdm-password"), 6.0);
+        let c: Config = toml::from_str("[auth.service_timeouts]\nkde = 0.1\n").unwrap();
+        assert!(c.validate().is_err());
+        let c: Config = toml::from_str("[auth]\nno_face_timeout_secs = 0.3\n").unwrap();
+        assert!(c.validate().is_err());
     }
 
     #[test]
