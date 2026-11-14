@@ -319,6 +319,12 @@ struct Detected {
 fn detect_cameras(cfg: &Config) -> Detected {
     let mut cameras = Vec::new();
     for info in camera::list_cameras() {
+        if info.depth {
+            // Depth nodes are reported separately and never used as camera.
+            let ev = info.evidence.clone();
+            cameras.push((info, CameraKind::Unknown, ev, None));
+            continue;
+        }
         let mut cam_cfg = cfg.camera.clone();
         cam_cfg.device = info.path.display().to_string();
         cam_cfg.expected_usb_id = None;
@@ -401,6 +407,25 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
             println!("✘ {}", tr(lang, "cli.doctor.no_ir", &[]));
             println!("\n{}\n", tr(lang, "cli.insecure_banner", &[]));
         }
+    }
+    for (info, _, _, _) in det.cameras.iter().filter(|(i, _, _, _)| i.depth) {
+        let mode = match cfg.camera.depth.mode {
+            frogger_core::config::DepthMode::Off => "off",
+            frogger_core::config::DepthMode::Auto => "auto",
+            frogger_core::config::DepthMode::Required => "required",
+        };
+        println!(
+            "✔ {}",
+            tr(
+                lang,
+                "cli.doctor.depth_found",
+                &[
+                    ("name", &info.name),
+                    ("device", &info.path.display().to_string()),
+                    ("mode", mode)
+                ]
+            )
+        );
     }
     if cfg.camera.emitter.is_some() {
         println!("✔ {}", tr(lang, "cli.doctor.emitter_configured", &[]));
@@ -498,7 +523,7 @@ fn setup(config: &Path, socket: &str, accept_rgb: bool, no_enroll: bool, lang: &
         .cameras
         .iter()
         .find(|(_, k, _, _)| *k == CameraKind::Infrared)
-        .or_else(|| det.cameras.first())
+        .or_else(|| det.cameras.iter().find(|(i, _, _, _)| !i.depth))
         .context(tr(lang, "cli.doctor.no_cameras", &[]))?;
     let (info, kind, _, _) = chosen;
     let mut accept = accept_rgb;

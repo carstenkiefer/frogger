@@ -1,11 +1,15 @@
 //! V4L2 camera access, IR-camera detection and IR emitter control.
 
-use crate::config::{CameraConfig, EmitterControl};
+use crate::config::{CameraConfig, DepthConfig, EmitterControl};
+use crate::vision::depth::{decode_z16, DepthImage};
 use crate::vision::Image;
 use anyhow::{bail, Context, Result};
 use serde::Serialize;
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use std::time::Instant;
 use v4l::buffer::Type;
 use v4l::io::mmap::Stream;
 use v4l::io::traits::CaptureStream;
@@ -41,6 +45,8 @@ pub struct CameraInfo {
     pub usb_id: Option<String>,
     pub formats: Vec<String>,
     pub kind: CameraKind,
+    /// Depth sensor node (delivers Z16 depth maps).
+    pub depth: bool,
     /// Human readable reasons for the classification.
     pub evidence: Vec<String>,
 }
@@ -108,7 +114,13 @@ pub fn probe(path: &Path) -> Result<CameraInfo> {
     if name_ir {
         evidence.push(format!("device name '{}' indicates IR", caps.card));
     }
-    let kind = if mono_format && !colour_format {
+    let depth = formats.iter().any(|f| f.trim() == "Z16");
+    if depth {
+        evidence.push("depth sensor (Z16)".into());
+    }
+    let kind = if depth && !mono_format && !colour_format {
+        CameraKind::Unknown
+    } else if mono_format && !colour_format {
         CameraKind::Infrared
     } else if mono_format || name_ir {
         // Needs a frame-based check (see `classify_frames`).
@@ -126,6 +138,7 @@ pub fn probe(path: &Path) -> Result<CameraInfo> {
         bus: caps.bus,
         formats,
         kind,
+        depth,
         evidence,
     })
 }
@@ -283,6 +296,7 @@ fn resolve_device(cfg: &CameraConfig) -> Result<PathBuf> {
     // arbitrary (e.g. RGB) device.
     let candidates: Vec<&CameraInfo> = cams
         .iter()
+        .filter(|c| !c.depth)
         .filter(|c| cfg.expected_usb_id.is_none() || c.usb_id == cfg.expected_usb_id)
         .collect();
     let best = candidates
@@ -298,6 +312,88 @@ fn resolve_device(cfg: &CameraConfig) -> Result<PathBuf> {
         })
         .context("no camera found")?;
     Ok(best.stable_path.clone().unwrap_or_else(|| best.path.clone()))
+}
+
+/// Depth node belonging to the IR camera: explicitly configured, or the Z16
+/// node of the same USB device (Intel RealSense exposes IR and depth there).
+pub fn find_depth_camera(cfg: &DepthConfig, ir: &CameraInfo) -> Option<PathBuf> {
+    if cfg.device != "auto" {
+        return Some(PathBuf::from(&cfg.device));
+    }
+    ir.usb_id.as_ref()?;
+    list_cameras()
+        .into_iter()
+        .find(|c| c.depth && c.usb_id == ir.usb_id)
+        .map(|c| c.stable_path.unwrap_or(c.path))
+}
+
+/// Background reader of a depth camera; keeps only the newest frame.
+pub struct DepthStream {
+    latest: Arc<Mutex<Option<(Instant, DepthImage)>>>,
+    stop: Arc<AtomicBool>,
+}
+
+impl DepthStream {
+    /// Start streaming; fails if no depth frame arrives within 3 s.
+    pub fn start(path: &Path) -> Result<DepthStream> {
+        let latest = Arc::new(Mutex::new(None));
+        let stop = Arc::new(AtomicBool::new(false));
+        let (tx, rx) = std::sync::mpsc::channel::<Result<()>>();
+        let (shared, stop_flag, path) = (latest.clone(), stop.clone(), path.to_path_buf());
+        std::thread::spawn(move || {
+            let run = || -> Result<()> {
+                let dev = Device::with_path(&path).with_context(|| format!("opening {}", path.display()))?;
+                let mut fmt = dev.format()?;
+                fmt.fourcc = FourCC::new(b"Z16 ");
+                let fmt = dev.set_format(&fmt)?;
+                if &fmt.fourcc.repr != b"Z16 " {
+                    bail!("{} does not deliver Z16 depth maps", path.display());
+                }
+                let (w, h) = (fmt.width as usize, fmt.height as usize);
+                let mut stream = Stream::with_buffers(&dev, Type::VideoCapture, 4)?;
+                stream.set_timeout(Duration::from_millis(1500));
+                let mut first = true;
+                while !stop_flag.load(Ordering::Relaxed) {
+                    let (buf, _) = stream.next()?;
+                    if let Some(img) = decode_z16(buf, w, h) {
+                        *shared.lock().unwrap_or_else(|p| p.into_inner()) = Some((Instant::now(), img));
+                        if first {
+                            first = false;
+                            let _ = tx.send(Ok(()));
+                        }
+                    }
+                }
+                Ok(())
+            };
+            if let Err(e) = run() {
+                let _ = tx.send(Err(e));
+            }
+        });
+        match rx.recv_timeout(Duration::from_secs(3)) {
+            Ok(Ok(())) => Ok(DepthStream { latest, stop }),
+            Ok(Err(e)) => Err(e),
+            Err(_) => {
+                stop.store(true, Ordering::Relaxed);
+                bail!("depth camera delivered no frame")
+            }
+        }
+    }
+
+    /// Newest depth frame if it is not older than `max_age`.
+    pub fn latest(&self, max_age: Duration) -> Option<DepthImage> {
+        let g = self.latest.lock().unwrap_or_else(|p| p.into_inner());
+        g.as_ref()
+            .filter(|(t, _)| t.elapsed() <= max_age)
+            .map(|(_, img)| img.clone())
+    }
+}
+
+impl Drop for DepthStream {
+    fn drop(&mut self) {
+        // The reader thread exits after its next frame (≤ one frame period);
+        // not joined so the authentication result is not delayed.
+        self.stop.store(true, Ordering::Relaxed);
+    }
 }
 
 /// Decode a raw V4L2 buffer.
