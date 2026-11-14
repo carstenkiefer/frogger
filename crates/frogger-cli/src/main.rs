@@ -20,7 +20,7 @@ const PAM_LINE: &str = "auth [success=end default=ignore] pam_frogger.so";
 #[derive(Parser)]
 #[command(
     name = "frogger",
-    version,
+    version = frogger_proto::version(),
     about = "FROGGER – face authentication for Linux with IR cameras"
 )]
 struct Cli {

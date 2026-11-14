@@ -14,6 +14,8 @@ OUT=${3:-dist}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
 MODEL_DIR=${MODEL_DIR:-$ROOT/target/models}
 VERSION=${VERSION:-$(sed -n 's/^version = "\(.*\)"/\1/p' "$ROOT/Cargo.toml" | head -1)}
+# Pre-releases (1.2.3-alpha) must sort before the final release: dpkg/rpm use "~".
+PKG_VERSION=${VERSION//-/\~}
 MAINTAINER=${MAINTAINER:-"FROGGER maintainers <frogger@users.noreply.github.com>"}
 
 case "$ARCH" in
@@ -63,7 +65,7 @@ install -m755 "$ROOT/packaging/debian/postinst" "$ROOT/packaging/debian/prerm" "
 SIZE=$(du -sk --exclude=DEBIAN "$DEB" | cut -f1)
 cat > "$DEB/DEBIAN/control" <<CONTROL
 Package: frogger
-Version: $VERSION
+Version: $PKG_VERSION
 Architecture: $ARCH
 Maintainer: $MAINTAINER
 Installed-Size: $SIZE
@@ -78,14 +80,14 @@ Description: Face authentication with IR cameras (Windows-Hello-like)
  check so that photos and screens cannot be used to log in. Devices without
  an IR camera are refused by default policy.
 CONTROL
-dpkg-deb --root-owner-group -Zxz --build "$DEB" "$OUT/frogger_${VERSION}_${ARCH}.deb"
+dpkg-deb --root-owner-group -Zxz --build "$DEB" "$OUT/frogger_${PKG_VERSION}_${ARCH}.deb"
 
 # ---- Fedora / RHEL / openSUSE ---------------------------------------------
 RPMSTAGE=$WORK/rpmroot
 stage "$RPMSTAGE" "/usr/lib64/security" system-auth no
 RPMTOP=$WORK/rpmbuild
 mkdir -p "$RPMTOP"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-sed -e "s/@VERSION@/${VERSION//-/~}/" "$ROOT/packaging/rpm/frogger.spec.in" > "$RPMTOP/SPECS/frogger.spec"
+sed -e "s/@VERSION@/$PKG_VERSION/" "$ROOT/packaging/rpm/frogger.spec.in" > "$RPMTOP/SPECS/frogger.spec"
 rpmbuild -bb --target "$RPM_ARCH" \
   --define "_topdir $RPMTOP" \
   --define "stage $RPMSTAGE" \

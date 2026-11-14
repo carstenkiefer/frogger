@@ -79,6 +79,9 @@ jobs:
       # baseline: runs on Debian 13, Ubuntu 24.04/26.04, Fedora, RHEL 10.
       # SIMD kernels of the inference engine are selected at runtime.
       - name: Build
+        # Embed the release version (tag without "v") into the binaries.
+        env:
+          FROGGER_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
         run: cargo build --release --locked --workspace
       - name: Fetch models
         run: packaging/fetch-models.sh

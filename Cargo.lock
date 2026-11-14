@@ -470,7 +470,7 @@ checksum = "77ce24cb58228fbb8aa041425bb1050850ac19177686ea6e0f41a70416f56fdb"
 
 [[package]]
 name = "frogger-cli"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "clap",
@@ -484,7 +484,7 @@ dependencies = [
 
 [[package]]
 name = "frogger-core"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "frogger-i18n",
@@ -502,14 +502,14 @@ dependencies = [
 
 [[package]]
 name = "frogger-i18n"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "toml",
 ]
 
 [[package]]
 name = "frogger-proto"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "serde",
  "serde_json",
@@ -517,7 +517,7 @@ dependencies = [
 
 [[package]]
 name = "froggerd"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "anyhow",
  "env_logger",
@@ -932,7 +932,7 @@ checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
 name = "pam-frogger"
-version = "0.1.0"
+version = "0.0.1"
 dependencies = [
  "frogger-i18n",
  "frogger-proto",

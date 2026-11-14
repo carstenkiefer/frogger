@@ -207,7 +207,7 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
         Op::Status => {
             let e = d.engine.lock().unwrap_or_else(|p| p.into_inner());
             let data = serde_json::json!({
-                "version": env!("CARGO_PKG_VERSION"),
+                "version": frogger_proto::version(),
                 "liveness": e.cfg.effective_liveness(),
                 "allow_insecure_rgb": e.cfg.rgb_permitted(),
                 "sensitive_device": e.cfg.policy.sensitive_device,

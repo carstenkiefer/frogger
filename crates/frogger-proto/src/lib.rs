@@ -10,6 +10,15 @@
 
 use serde::{Deserialize, Serialize};
 
+/// Release version: the git tag set by CI (`FROGGER_VERSION`), otherwise the
+/// crate version.
+pub fn version() -> &'static str {
+    match option_env!("FROGGER_VERSION") {
+        Some(v) if !v.is_empty() => v.strip_prefix('v').unwrap_or(v),
+        _ => env!("CARGO_PKG_VERSION"),
+    }
+}
+
 /// Protocol version; bumped on incompatible changes.
 pub const PROTOCOL_VERSION: u32 = 1;
 
