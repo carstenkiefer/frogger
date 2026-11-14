@@ -45,6 +45,7 @@
 "cli.doctor.emitter_configured" = "IR 발광기 제어가 구성되어 있습니다."
 "cli.doctor.policy" = "정책: 안전하지 않은 RGB 허용: {rgb}, 민감한 기기: {sensitive}"
 "cli.doctor.models_missing" = "모델 파일이 없습니다: {path}"
+"cli.doctor.emitter_dark" = "적외선 이미지가 거의 검은색입니다. IR 발광기가 꺼져 있는 것 같습니다. linux-enable-ir-emitter로 설정한 뒤 결과를 가져오세요: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
 "cli.doctor.lid_closed" = "노트북 덮개가 닫혀 있습니다 – 카메라가 사용자를 볼 수 없습니다."
 "cli.doctor.daemon_ok" = "데몬이 실행 중입니다 (버전 {version})."
 "cli.desktop.gnome" = "GNOME: 얼굴 로그인은 로그인 화면과 잠금 화면에서 작동합니다 (PAM 서비스 gdm-password). 잠금 화면에서 아무 키나 누르거나 위로 스와이프하면 인식이 시작됩니다. 부팅 후 첫 로그인 시에는 키링 잠금을 해제하기 위해 비밀번호를 입력해야 합니다."

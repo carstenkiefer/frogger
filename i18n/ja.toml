@@ -45,6 +45,7 @@
 "cli.doctor.emitter_configured" = "IR エミッターの制御は設定済みです。"
 "cli.doctor.policy" = "ポリシー: 安全でない RGB を許可: {rgb}、機密デバイス: {sensitive}"
 "cli.doctor.models_missing" = "モデルファイルがありません: {path}"
+"cli.doctor.emitter_dark" = "赤外線画像がほぼ真っ黒です。IR エミッターがオフになっている可能性があります。linux-enable-ir-emitter で設定し、結果をインポートしてください: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
 "cli.doctor.lid_closed" = "ノートパソコンの蓋が閉じています – カメラにあなたが映りません。"
 "cli.doctor.daemon_ok" = "デーモンは実行中です (バージョン {version})。"
 "cli.desktop.gnome" = "GNOME: 顔ログインはログイン画面とロック画面で使用できます (PAM サービス gdm-password)。ロック画面ではキーを押すか上にスワイプすると認識が始まります。起動後の最初のログインでは、キーリングのロックを解除するためにパスワードが求められます。"

@@ -45,6 +45,7 @@
 "cli.doctor.emitter_configured" = "Contrôle de l'émetteur IR configuré."
 "cli.doctor.policy" = "Politique : RGB non sécurisé autorisé : {rgb}, appareil sensible : {sensitive}"
 "cli.doctor.models_missing" = "Fichier de modèle manquant : {path}"
+"cli.doctor.emitter_dark" = "L'image infrarouge est presque noire : l'émetteur IR est probablement éteint. Configurez-le avec linux-enable-ir-emitter puis importez le résultat : sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
 "cli.doctor.lid_closed" = "L'écran de l'ordinateur portable est rabattu – la caméra ne peut pas vous voir."
 "cli.doctor.daemon_ok" = "Le démon est en cours d'exécution (version {version})."
 "cli.desktop.gnome" = "GNOME : la connexion par visage fonctionne sur l'écran de connexion et l'écran de verrouillage (service PAM gdm-password). Sur l'écran de verrouillage, appuyez sur une touche ou balayez vers le haut pour lancer la reconnaissance. La première connexion après le démarrage demande le mot de passe afin de déverrouiller le trousseau de clés."

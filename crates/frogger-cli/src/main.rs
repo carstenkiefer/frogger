@@ -308,7 +308,12 @@ fn enroll(socket: &str, user: String, label: Option<String>, accept: bool, lang:
 // doctor / setup
 
 struct Detected {
-    cameras: Vec<(camera::CameraInfo, CameraKind, Vec<String>)>,
+    cameras: Vec<(
+        camera::CameraInfo,
+        CameraKind,
+        Vec<String>,
+        Option<camera::CaptureStats>,
+    )>,
 }
 
 fn detect_cameras(cfg: &Config) -> Detected {
@@ -317,18 +322,24 @@ fn detect_cameras(cfg: &Config) -> Detected {
         let mut cam_cfg = cfg.camera.clone();
         cam_cfg.device = info.path.display().to_string();
         cam_cfg.expected_usb_id = None;
-        let (kind, ev) = match Camera::open(&cam_cfg) {
+        // The emitter control is a vendor extension unit: never send it to a
+        // colour camera.
+        if info.kind == CameraKind::Rgb {
+            cam_cfg.emitter = None;
+        }
+        let (kind, ev, stats) = match Camera::open(&cam_cfg) {
             Ok(mut cam) => {
-                let stats = camera::capture_stats(&mut cam, 8).ok();
-                camera::classify(&info, stats.as_ref())
+                let stats = camera::capture_stats(&mut cam, 12).ok();
+                let (k, e) = camera::classify(&info, stats.as_ref());
+                (k, e, stats)
             }
             Err(e) => {
                 let mut ev = info.evidence.clone();
                 ev.push(format!("could not capture: {e:#}"));
-                (info.kind, ev)
+                (info.kind, ev, None)
             }
         };
-        cameras.push((info, kind, ev));
+        cameras.push((info, kind, ev, stats));
     }
     Detected { cameras }
 }
@@ -344,7 +355,7 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
     if det.cameras.is_empty() {
         println!("  {}", tr(lang, "cli.doctor.no_cameras", &[]));
     }
-    for (info, kind, ev) in &det.cameras {
+    for (info, kind, ev, stats) in &det.cameras {
         let stable = info
             .stable_path
             .as_ref()
@@ -364,11 +375,17 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
         for e in ev {
             println!("      · {e}");
         }
+        if let Some(st) = stats {
+            println!("      · mean brightness {:.0}/255", st.mean_brightness);
+            if *kind == CameraKind::Infrared && camera::emitter_looks_off(st) {
+                println!("      (!) {}", tr(lang, "cli.doctor.emitter_dark", &[]));
+            }
+        }
     }
-    let ir = det.cameras.iter().find(|(_, k, _)| *k == CameraKind::Infrared);
+    let ir = det.cameras.iter().find(|(_, k, _, _)| *k == CameraKind::Infrared);
     println!();
     match ir {
-        Some((info, _, _)) => println!(
+        Some((info, _, _, _)) => println!(
             "✔ {}",
             tr(
                 lang,
@@ -448,10 +465,10 @@ fn setup(config: &Path, socket: &str, accept_rgb: bool, no_enroll: bool, lang: &
     let chosen = det
         .cameras
         .iter()
-        .find(|(_, k, _)| *k == CameraKind::Infrared)
+        .find(|(_, k, _, _)| *k == CameraKind::Infrared)
         .or_else(|| det.cameras.first())
         .context(tr(lang, "cli.doctor.no_cameras", &[]))?;
-    let (info, kind, _) = chosen;
+    let (info, kind, _, _) = chosen;
     let mut accept = accept_rgb;
     if *kind != CameraKind::Infrared {
         println!("\n{}\n", tr(lang, "cli.insecure_banner", &[]));

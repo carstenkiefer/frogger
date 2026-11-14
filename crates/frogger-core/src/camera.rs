@@ -13,7 +13,11 @@ use v4l::video::Capture;
 use v4l::{Device, FourCC};
 
 /// Pixel formats we can decode, best first for IR use.
-const PREFERRED: [&[u8; 4]; 5] = [b"GREY", b"Y16 ", b"YUYV", b"MJPG", b"RGB3"];
+/// Monochrome formats first (IR sensors), then YUV, then compressed/RGB.
+const PREFERRED: [&[u8; 4]; 13] = [
+    b"GREY", b"Y8I ", b"Y16 ", b"Y12 ", b"Y10 ", b"YUYV", b"UYVY", b"NV12", b"NV21", b"YU12", b"YV12",
+    b"MJPG", b"RGB3",
+];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
 #[serde(rename_all = "snake_case")]
@@ -314,6 +318,75 @@ pub fn decode(buf: &[u8], w: usize, h: usize, fourcc: &[u8; 4]) -> Result<Frame>
             let data = buf[..2 * n].as_chunks::<2>().0.iter().map(|p| p[1]).collect();
             (Image::from_gray(w, h, data), 0.0)
         }
+        b"Y10 " | b"Y12 " => {
+            // 16 bit little endian, LSB aligned (10 or 12 significant bits).
+            if buf.len() < 2 * n {
+                bail!("short Y10/Y12 frame");
+            }
+            let shift = if fourcc == b"Y10 " { 2 } else { 4 };
+            let data = buf[..2 * n]
+                .as_chunks::<2>()
+                .0
+                .iter()
+                .map(|p| (u16::from_le_bytes(*p) >> shift).min(255) as u8)
+                .collect();
+            (Image::from_gray(w, h, data), 0.0)
+        }
+        b"Y8I " => {
+            // Interleaved stereo IR (e.g. Intel RealSense): use the left sensor.
+            if buf.len() < 2 * n {
+                bail!("short Y8I frame");
+            }
+            let data = buf[..2 * n].as_chunks::<2>().0.iter().map(|p| p[0]).collect();
+            (Image::from_gray(w, h, data), 0.0)
+        }
+        b"UYVY" => {
+            if buf.len() < 2 * n {
+                bail!("short UYVY frame");
+            }
+            let yuyv: Vec<u8> = buf[..2 * n]
+                .as_chunks::<4>()
+                .0
+                .iter()
+                .flat_map(|p| [p[1], p[0], p[3], p[2]])
+                .collect();
+            return decode(&yuyv, w, h, b"YUYV");
+        }
+        b"NV12" | b"NV21" | b"YU12" | b"YV12" => {
+            if buf.len() < n + n / 2 || !w.is_multiple_of(2) || !h.is_multiple_of(2) {
+                bail!("short or odd-sized 4:2:0 frame");
+            }
+            let (y, c) = buf[..n + n / 2].split_at(n);
+            let q = n / 4;
+            let cw = w / 2;
+            // (u, v) of the chroma sample covering chroma position i.
+            let uv = |i: usize| -> (u8, u8) {
+                match fourcc {
+                    b"NV12" => (c[2 * i], c[2 * i + 1]),
+                    b"NV21" => (c[2 * i + 1], c[2 * i]),
+                    b"YU12" => (c[i], c[q + i]),
+                    _ => (c[q + i], c[i]), // YV12
+                }
+            };
+            let mut chroma_sum = 0u64;
+            for i in 0..q {
+                let (u, v) = uv(i);
+                chroma_sum += (u as i32 - 128).unsigned_abs() as u64 + (v as i32 - 128).unsigned_abs() as u64;
+            }
+            let chroma = chroma_sum as f32 / q.max(1) as f32;
+            if chroma < 2.0 {
+                (Image::from_gray(w, h, y.to_vec()), chroma)
+            } else {
+                let mut out = Vec::with_capacity(3 * n);
+                for row in 0..h {
+                    for col in 0..w {
+                        let (u, v) = uv((row / 2) * cw + col / 2);
+                        out.extend(yuv_to_rgb(y[row * w + col], u, v));
+                    }
+                }
+                (Image::from_rgb(w, h, out), chroma)
+            }
+        }
         b"YUYV" => {
             if buf.len() < 2 * n {
                 bail!("short YUYV frame");
@@ -373,6 +446,15 @@ fn rgb_chroma(img: &Image) -> f32 {
     }
 }
 
+fn yuv_to_rgb(y: u8, u: u8, v: u8) -> [u8; 3] {
+    let (y, u, v) = (y as f32, u as f32 - 128.0, v as f32 - 128.0);
+    [
+        (y + 1.402 * v).clamp(0.0, 255.0) as u8,
+        (y - 0.344 * u - 0.714 * v).clamp(0.0, 255.0) as u8,
+        (y + 1.772 * u).clamp(0.0, 255.0) as u8,
+    ]
+}
+
 fn yuyv_to_rgb(buf: &[u8], w: usize, h: usize) -> Image {
     let mut out = Vec::with_capacity(w * h * 3);
     for px in buf.as_chunks::<4>().0 {
@@ -415,6 +497,12 @@ pub fn capture_stats(cam: &mut Camera, frames: usize) -> Result<CaptureStats> {
         mean_brightness: mean,
         alternation: if mean > 1.0 { alt / mean } else { 0.0 },
     })
+}
+
+/// An IR image that is almost black and does not strobe: the emitter is most
+/// likely switched off (common default; enable it with linux-enable-ir-emitter).
+pub fn emitter_looks_off(s: &CaptureStats) -> bool {
+    s.mean_brightness < 15.0 && s.alternation < 0.25
 }
 
 /// Final classification from static probe + captured frames.
@@ -542,6 +630,48 @@ mod tests {
         let buf: Vec<u8> = (0..16).flat_map(|_| [120u8, 40]).collect();
         let f = decode(&buf, 4, 4, b"YUYV").unwrap();
         assert!(!f.image.is_gray());
+    }
+
+    #[test]
+    fn decode_more_mono_formats() {
+        // Y10: 10-bit value 800 → 200 after scaling to 8 bit.
+        let y10: Vec<u8> = (0..16).flat_map(|_| 800u16.to_le_bytes()).collect();
+        let f = decode(&y10, 4, 4, b"Y10 ").unwrap();
+        assert!(f.image.is_gray() && f.image.data.iter().all(|&v| v == 200));
+        let y12: Vec<u8> = (0..16).flat_map(|_| 4000u16.to_le_bytes()).collect();
+        assert!(decode(&y12, 4, 4, b"Y12 ")
+            .unwrap()
+            .image
+            .data
+            .iter()
+            .all(|&v| v == 250));
+        let y8i: Vec<u8> = (0..16).flat_map(|_| [77u8, 3]).collect();
+        assert!(decode(&y8i, 4, 4, b"Y8I ")
+            .unwrap()
+            .image
+            .data
+            .iter()
+            .all(|&v| v == 77));
+    }
+
+    #[test]
+    fn decode_yuv_variants() {
+        // UYVY with neutral chroma → gray with the Y values.
+        let uyvy: Vec<u8> = (0..8).flat_map(|_| [128u8, 60, 128, 61]).collect();
+        let f = decode(&uyvy, 4, 4, b"UYVY").unwrap();
+        assert!(f.image.is_gray());
+        assert_eq!(&f.image.data[..2], &[60, 61]);
+        // NV12 grey and coloured.
+        let mut nv12 = vec![90u8; 16];
+        nv12.extend([128u8; 8]);
+        let f = decode(&nv12, 4, 4, b"NV12").unwrap();
+        assert!(f.image.is_gray() && f.mean == 90.0);
+        let mut nv12c = vec![90u8; 16];
+        nv12c.extend([60u8, 200, 60, 200, 60, 200, 60, 200]);
+        assert!(!decode(&nv12c, 4, 4, b"NV12").unwrap().image.is_gray());
+        let mut yu12 = vec![40u8; 16];
+        yu12.extend([128u8; 8]);
+        assert!(decode(&yu12, 4, 4, b"YU12").unwrap().image.is_gray());
     }
 
     #[test]

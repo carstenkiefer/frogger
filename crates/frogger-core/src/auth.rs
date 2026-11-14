@@ -112,6 +112,11 @@ pub struct Stats {
     pub dark_frames: u32,
     pub emitter_off_frames: u32,
     pub lit_face_frames: u32,
+    /// Mean brightness (0-255) of faces in lit frames – compare with
+    /// `liveness.min_ir_face_brightness` when tuning weak emitters.
+    pub mean_face_brightness: f32,
+    /// Brightest face seen in a frame rejected as unlit.
+    pub max_dark_face_brightness: f32,
     pub colour_frames: u32,
     pub track_breaks: u32,
     pub blink_detected: bool,
@@ -223,10 +228,13 @@ impl<'a> Verifier<'a> {
             // off phase. Such a frame proves nothing, so it is ignored – it
             // can neither contribute to nor reset a track.
             self.stats.dark_frames += 1;
+            self.stats.max_dark_face_brightness = self.stats.max_dark_face_brightness.max(a.face_brightness);
             return Progress::Continue;
         }
         self.missing = 0;
         self.stats.lit_face_frames += 1;
+        let n = self.stats.lit_face_frames as f32;
+        self.stats.mean_face_brightness += (a.face_brightness - self.stats.mean_face_brightness) / n;
         if let Some(prev) = &self.last_face {
             if prev.iou(&a.face) < lv.min_track_iou {
                 self.reset_track();
