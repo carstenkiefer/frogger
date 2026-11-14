@@ -377,6 +377,10 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
         }
         if let Some(st) = stats {
             println!("      · mean brightness {:.0}/255", st.mean_brightness);
+            println!(
+                "      · ~{:.0} frames/s, ~{:.0} lit by the emitter",
+                st.fps, st.lit_fps
+            );
             if *kind == CameraKind::Infrared && camera::emitter_looks_off(st) {
                 println!("      (!) {}", tr(lang, "cli.doctor.emitter_dark", &[]));
             }

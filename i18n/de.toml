@@ -1,8 +1,8 @@
 # FROGGER Meldungskatalog – Deutsch.
 
-"auth.start" = "Gesichtserkennung: Bitte in die Kamera schauen und einmal blinzeln."
+"auth.start" = "Gesichtserkennung: Bitte in die Kamera schauen und einmal langsam blinzeln."
 "auth.start_ir_only" = "Gesichtserkennung: Bitte in die Kamera schauen."
-"auth.blink" = "Bitte blinzeln."
+"auth.blink" = "Bitte langsam blinzeln."
 "auth.success" = "Gesicht erkannt."
 "auth.no_face" = "Kein Gesicht erkannt."
 "auth.not_recognized" = "Gesicht nicht erkannt."
@@ -18,7 +18,7 @@
 "enroll.turn" = "Jetzt den Kopf langsam etwas nach links und rechts drehen."
 "enroll.close_eyes" = "Jetzt die Augen für etwa zwei Sekunden schließen."
 "enroll.open_eyes" = "Augen wieder öffnen."
-"enroll.verify" = "Überprüfung: Bitte in die Kamera schauen und einmal blinzeln."
+"enroll.verify" = "Überprüfung: Bitte in die Kamera schauen und einmal langsam blinzeln."
 "enroll.verify_failed" = "Überprüfung fehlgeschlagen, es wurde nichts gespeichert."
 "enroll.done" = "Einlernen abgeschlossen ({count} Proben gespeichert)."
 "enroll.no_face" = "Kein verwendbares Gesicht gefunden. Bitte Beleuchtung und Abstand zur Kamera prüfen."

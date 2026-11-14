@@ -1,8 +1,8 @@
 # FROGGER 메시지 카탈로그 – 한국어.
 
-"auth.start" = "얼굴 인식: 카메라를 보고 눈을 한 번 깜빡이세요."
+"auth.start" = "얼굴 인식: 카메라를 보고 천천히 한 번 눈을 깜박이세요."
 "auth.start_ir_only" = "얼굴 인식: 카메라를 보세요."
-"auth.blink" = "눈을 깜빡이세요."
+"auth.blink" = "천천히 눈을 깜박이세요."
 "auth.success" = "얼굴이 인식되었습니다."
 "auth.no_face" = "얼굴이 감지되지 않았습니다."
 "auth.not_recognized" = "얼굴을 인식하지 못했습니다."
@@ -18,7 +18,7 @@
 "enroll.turn" = "이제 머리를 천천히 왼쪽과 오른쪽으로 조금씩 돌리세요."
 "enroll.close_eyes" = "이제 약 2초 동안 눈을 감으세요."
 "enroll.open_eyes" = "다시 눈을 뜨세요."
-"enroll.verify" = "확인: 카메라를 보고 눈을 한 번 깜빡이세요."
+"enroll.verify" = "확인: 카메라를 보고 천천히 한 번 눈을 깜박이세요."
 "enroll.verify_failed" = "확인에 실패했습니다. 아무것도 저장되지 않았습니다."
 "enroll.done" = "등록이 완료되었습니다 (샘플 {count}개 저장됨)."
 "enroll.no_face" = "사용할 수 있는 얼굴을 찾지 못했습니다. 조명과 카메라와의 거리를 확인하세요."

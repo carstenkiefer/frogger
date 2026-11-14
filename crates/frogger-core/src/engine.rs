@@ -153,6 +153,14 @@ impl Engine {
                 _ => {}
             }
         }
+        if !success {
+            log::info!(
+                "attempt for {} without success: {:?}, stats {}",
+                template.user,
+                verifier.failure_reason(),
+                serde_json::to_string(&verifier.stats).unwrap_or_default()
+            );
+        }
         Ok(AttemptReport {
             success,
             reason: (!success).then(|| verifier.failure_reason()),
@@ -218,7 +226,13 @@ impl Engine {
 
     /// Diagnostic attempt that reports scores; never counts as a login.
     pub fn test(&self, user: &str, lang: &str, emit: Emit) -> Result<AttemptReport> {
-        let t = self.usable_template(user).map_err(|o| anyhow::anyhow!("{o:?}"))?;
+        let t = self.usable_template(user).map_err(|o| match o {
+            Outcome::Unavailable(m) if m == "not enrolled" => {
+                anyhow::anyhow!("{}", tr(lang, "cli.not_enrolled", &[("user", user)]))
+            }
+            Outcome::Unavailable(m) | Outcome::Failure(m) | Outcome::Denied(m) => anyhow::anyhow!("{m}"),
+            Outcome::Success => anyhow::anyhow!("unexpected state"),
+        })?;
         emit(tr(lang, "auth.start", &[]));
         self.attempt(&t, lang, emit)
     }

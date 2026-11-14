@@ -1,9 +1,9 @@
 # FROGGER message catalog – Runyankore (Nkore, Uganda; ISO 639-3 nyn).
 # Machine translation – please have a native speaker review.
 
-"auth.start" = "Okumanya obuso: reeba omuri kamera, ohumirize kandi ohumuure amaisho omurundi gumwe."
+"auth.start" = "Okumanya obuso: reeba omuri kamera, ohumirize mpora kandi ohumuure amaisho omurundi gumwe."
 "auth.start_ir_only" = "Okumanya obuso: reeba omuri kamera."
-"auth.blink" = "Ninkushaba, humiriza kandi ohumuure amaisho."
+"auth.blink" = "Ninkushaba, humiriza mpora kandi ohumuure amaisho."
 "auth.success" = "Obuso bwamanyirwe."
 "auth.no_face" = "Tihabonekire buso."
 "auth.not_recognized" = "Obuso tibwamanyirwe."
@@ -19,7 +19,7 @@
 "enroll.turn" = "Hati hindura omutwe gwawe mpora mpora kakye ebumoso n'eburyo."
 "enroll.close_eyes" = "Hati humiriza amaisho gaawe nk'esekondi ibiri."
 "enroll.open_eyes" = "Ongyere ohumuure amaisho gaawe."
-"enroll.verify" = "Okukyebera: reeba omuri kamera, ohumirize kandi ohumuure amaisho omurundi gumwe."
+"enroll.verify" = "Okukyebera: reeba omuri kamera, ohumirize mpora kandi ohumuure amaisho omurundi gumwe."
 "enroll.verify_failed" = "Okukyebera kuremiirwe, tihariho kintu kyabiikirwe."
 "enroll.done" = "Okuhandiika kwahwa (ebyokureeberaho {count} byabiikirwe)."
 "enroll.no_face" = "Tihabonekire buso oburikukozesebwa. Kyebera omushana n'oku ori hare na kamera."

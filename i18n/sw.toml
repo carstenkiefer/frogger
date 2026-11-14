@@ -1,8 +1,8 @@
 # Orodha ya ujumbe ya FROGGER – Kiswahili.
 
-"auth.start" = "Utambuzi wa uso: tazama kamera na upepese macho mara moja."
+"auth.start" = "Utambuzi wa uso: tazama kamera na upepese macho polepole mara moja."
 "auth.start_ir_only" = "Utambuzi wa uso: tazama kamera."
-"auth.blink" = "Tafadhali pepesa macho."
+"auth.blink" = "Tafadhali pepesa macho polepole."
 "auth.success" = "Uso umetambuliwa."
 "auth.no_face" = "Hakuna uso uliogunduliwa."
 "auth.not_recognized" = "Uso haukutambuliwa."
@@ -18,7 +18,7 @@
 "enroll.turn" = "Sasa geuza kichwa chako polepole kidogo kushoto na kulia."
 "enroll.close_eyes" = "Sasa funga macho yako kwa takriban sekunde mbili."
 "enroll.open_eyes" = "Fungua macho yako tena."
-"enroll.verify" = "Uthibitishaji: tazama kamera na upepese macho mara moja."
+"enroll.verify" = "Uthibitishaji: tazama kamera na upepese macho polepole mara moja."
 "enroll.verify_failed" = "Uthibitishaji umeshindwa, hakuna kilichohifadhiwa."
 "enroll.done" = "Usajili umekamilika (sampuli {count} zimehifadhiwa)."
 "enroll.no_face" = "Hakuna uso unaofaa uliopatikana. Angalia mwanga na umbali kutoka kwa kamera."

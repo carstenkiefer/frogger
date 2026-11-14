@@ -88,6 +88,9 @@ pub fn average(patches: &[&[f32]]) -> Vec<f32> {
     acc
 }
 
+/// Lower bound of [`EyeCalibration::dip_threshold`].
+const MIN_DIP: f32 = 0.06;
+
 /// Per-user eye references recorded during enrollment.
 #[derive(Clone, Debug, Serialize, Deserialize)]
 pub struct EyeCalibration {
@@ -155,6 +158,22 @@ impl EyeCalibration {
         } else {
             0.0
         }
+    }
+
+    /// Per eye (left, right): similarity to the open and to the closed
+    /// reference.
+    pub fn components(&self, p: &EyePair) -> [(f32, f32); 2] {
+        [
+            (ncc(&p.left, &self.open.left), ncc(&p.left, &self.closed.left)),
+            (ncc(&p.right, &self.open.right), ncc(&p.right, &self.closed.right)),
+        ]
+    }
+
+    /// Minimum drop of the open-minus-closed score that counts as an eyelid
+    /// movement. Half of the enrollment gap: a fast blink caught half-closed
+    /// by the camera reaches it, sensor noise does not.
+    pub fn dip_threshold(&self) -> f32 {
+        (1.5 * self.margin).max(MIN_DIP)
     }
 
     pub fn state(&self, p: &EyePair) -> EyeState {

@@ -1,8 +1,8 @@
 # Katalog pesan FROGGER – Bahasa Indonesia.
 
-"auth.start" = "Pengenalan wajah: lihat ke kamera dan berkedip sekali."
+"auth.start" = "Pengenalan wajah: lihat ke kamera dan berkedip pelan sekali."
 "auth.start_ir_only" = "Pengenalan wajah: lihat ke kamera."
-"auth.blink" = "Silakan berkedip."
+"auth.blink" = "Silakan berkedip pelan."
 "auth.success" = "Wajah dikenali."
 "auth.no_face" = "Tidak ada wajah yang terdeteksi."
 "auth.not_recognized" = "Wajah tidak dikenali."
@@ -18,7 +18,7 @@
 "enroll.turn" = "Sekarang putar kepala Anda perlahan sedikit ke kiri dan ke kanan."
 "enroll.close_eyes" = "Sekarang tutup mata Anda selama sekitar dua detik."
 "enroll.open_eyes" = "Buka kembali mata Anda."
-"enroll.verify" = "Verifikasi: lihat ke kamera dan berkedip sekali."
+"enroll.verify" = "Verifikasi: lihat ke kamera dan berkedip pelan sekali."
 "enroll.verify_failed" = "Verifikasi gagal, tidak ada yang disimpan."
 "enroll.done" = "Pendaftaran selesai ({count} sampel disimpan)."
 "enroll.no_face" = "Tidak ditemukan wajah yang dapat digunakan. Periksa pencahayaan dan jarak ke kamera."

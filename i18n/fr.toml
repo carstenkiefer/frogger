@@ -1,8 +1,8 @@
 # Catalogue de messages FROGGER – Français.
 
-"auth.start" = "Reconnaissance faciale : regardez la caméra et clignez des yeux une fois."
+"auth.start" = "Reconnaissance faciale : regardez la caméra et clignez lentement des yeux une fois."
 "auth.start_ir_only" = "Reconnaissance faciale : regardez la caméra."
-"auth.blink" = "Veuillez cligner des yeux."
+"auth.blink" = "Veuillez cligner lentement des yeux."
 "auth.success" = "Visage reconnu."
 "auth.no_face" = "Aucun visage détecté."
 "auth.not_recognized" = "Visage non reconnu."
@@ -18,7 +18,7 @@
 "enroll.turn" = "Tournez maintenant lentement la tête un peu vers la gauche et vers la droite."
 "enroll.close_eyes" = "Fermez maintenant les yeux pendant environ deux secondes."
 "enroll.open_eyes" = "Rouvrez les yeux."
-"enroll.verify" = "Vérification : regardez la caméra et clignez des yeux une fois."
+"enroll.verify" = "Vérification : regardez la caméra et clignez lentement des yeux une fois."
 "enroll.verify_failed" = "Échec de la vérification, rien n'a été enregistré."
 "enroll.done" = "Enregistrement terminé ({count} échantillons stockés)."
 "enroll.no_face" = "Aucun visage exploitable trouvé. Vérifiez l'éclairage et la distance à la caméra."

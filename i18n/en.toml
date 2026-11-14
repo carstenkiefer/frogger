@@ -1,9 +1,9 @@
 # FROGGER message catalog – English (reference).
 # Keys are quoted on purpose (flat table). Keep {placeholders} unchanged.
 
-"auth.start" = "Face recognition: look at the camera and blink once."
+"auth.start" = "Face recognition: look at the camera and blink slowly once."
 "auth.start_ir_only" = "Face recognition: look at the camera."
-"auth.blink" = "Please blink."
+"auth.blink" = "Please blink slowly."
 "auth.success" = "Face recognized."
 "auth.no_face" = "No face detected."
 "auth.not_recognized" = "Face not recognized."
@@ -19,7 +19,7 @@
 "enroll.turn" = "Now slowly turn your head a little to the left and right."
 "enroll.close_eyes" = "Now close your eyes for about two seconds."
 "enroll.open_eyes" = "Open your eyes again."
-"enroll.verify" = "Verification: look at the camera and blink once."
+"enroll.verify" = "Verification: look at the camera and blink slowly once."
 "enroll.verify_failed" = "Verification failed, nothing was saved."
 "enroll.done" = "Enrollment complete ({count} samples stored)."
 "enroll.no_face" = "No usable face found. Check lighting and the distance to the camera."

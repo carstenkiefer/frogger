@@ -1,8 +1,8 @@
 # FROGGER 消息目录 – 简体中文。
 
-"auth.start" = "人脸识别：请看向摄像头并眨一次眼。"
+"auth.start" = "面部识别：请看向摄像头并缓慢眨眼一次。"
 "auth.start_ir_only" = "人脸识别：请看向摄像头。"
-"auth.blink" = "请眨眼。"
+"auth.blink" = "请缓慢眨眼。"
 "auth.success" = "已识别人脸。"
 "auth.no_face" = "未检测到人脸。"
 "auth.not_recognized" = "无法识别人脸。"
@@ -18,7 +18,7 @@
 "enroll.turn" = "现在请将头缓慢地稍向左、向右转动。"
 "enroll.close_eyes" = "现在请闭眼约两秒钟。"
 "enroll.open_eyes" = "请重新睁开眼睛。"
-"enroll.verify" = "验证：请看向摄像头并眨一次眼。"
+"enroll.verify" = "验证：请看向摄像头并缓慢眨眼一次。"
 "enroll.verify_failed" = "验证失败，未保存任何数据。"
 "enroll.done" = "录入完成（已保存 {count} 个样本）。"
 "enroll.no_face" = "未找到可用的人脸。请检查光线以及与摄像头的距离。"
