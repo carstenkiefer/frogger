@@ -68,6 +68,11 @@ enum Cmd {
         #[arg(value_parser = ["enable", "disable", "status"])]
         action: String,
     },
+    /// Confirm every use of your SSH keys (ssh-add -c) with your face
+    Ssh {
+        #[arg(value_parser = ["enable", "disable", "status"])]
+        action: String,
+    },
     /// Import IR emitter settings from linux-enable-ir-emitter
     Emitter {
         #[arg(value_parser = ["import"])]
@@ -246,6 +251,7 @@ fn run(cli: Cli, lang: &str) -> Result<()> {
             }
             Ok(())
         }
+        Cmd::Ssh { action } => ssh(&action, lang),
         Cmd::Emitter { path, .. } => {
             require_root(lang)?;
             let src =
@@ -733,6 +739,112 @@ fn kde_face(enable: bool) -> Result<()> {
         }
     } else if ours {
         std::fs::remove_file(path)?;
+    }
+    Ok(())
+}
+
+// ---------------------------------------------------------------------------
+// SSH key confirmation (per user, no root needed)
+
+const ASKPASS_CANDIDATES: &[&str] = &["/usr/libexec/frogger-askpass", "/usr/lib/frogger/frogger-askpass"];
+const SSH_ENV_FILE: &str = "60-frogger-askpass.conf";
+/// ssh-agent units of Debian/Ubuntu/KDE (openssh) and GNOME (gcr).
+const SSH_AGENT_UNITS: &[&str] = &["ssh-agent.service", "gcr-ssh-agent.service"];
+const DROPIN_FILE: &str = "frogger-askpass.conf";
+
+fn config_home() -> Result<PathBuf> {
+    std::env::var_os("XDG_CONFIG_HOME")
+        .map(PathBuf::from)
+        .or_else(|| std::env::var_os("HOME").map(|h| PathBuf::from(h).join(".config")))
+        .context("cannot determine the configuration directory")
+}
+
+/// Files written by `frogger ssh enable`.
+fn ssh_files() -> Result<(PathBuf, Vec<PathBuf>)> {
+    let base = config_home()?;
+    let env = base.join("environment.d").join(SSH_ENV_FILE);
+    let dropins = SSH_AGENT_UNITS
+        .iter()
+        .map(|u| base.join("systemd/user").join(format!("{u}.d")).join(DROPIN_FILE))
+        .collect();
+    Ok((env, dropins))
+}
+
+/// Keys added with `ssh-add -c` are confirmed with the face on every use.
+///
+/// * `SSH_ASKPASS` (environment.d) points ssh tools of the session at
+///   frogger-askpass; it only takes over confirmations and hands passphrase
+///   prompts to the previous askpass. Terminal prompts are unaffected.
+/// * `SSH_ASKPASS_REQUIRE=force` is set for the agent services only
+///   (systemd drop-ins), so ssh-agent asks even without an X11 `DISPLAY`.
+fn ssh(action: &str, lang: &str) -> Result<()> {
+    if is_root() {
+        bail!("run `frogger ssh {action}` as the user whose ssh-agent should use it (without sudo)");
+    }
+    let (env_file, dropins) = ssh_files()?;
+    match action {
+        "enable" => {
+            let askpass = ASKPASS_CANDIDATES
+                .iter()
+                .find(|p| Path::new(p).exists())
+                .context(tr(lang, "cli.ssh.not_installed", &[]))?;
+            let fallback = std::env::var("SSH_ASKPASS")
+                .ok()
+                .filter(|p| !p.is_empty() && !p.contains("frogger-askpass"));
+            let mut env = String::from(
+                "# FROGGER: confirm ssh-agent key use (ssh-add -c) with face authentication.\n\
+                 # Remove with: frogger ssh disable\n",
+            );
+            env += &format!("SSH_ASKPASS={askpass}\n");
+            let mut unit_env = format!("SSH_ASKPASS={askpass} SSH_ASKPASS_REQUIRE=force");
+            if let Some(fb) = &fallback {
+                env += &format!("FROGGER_ASKPASS_FALLBACK={fb}\n");
+                unit_env += &format!(" FROGGER_ASKPASS_FALLBACK={fb}");
+            }
+            std::fs::create_dir_all(env_file.parent().expect("has parent"))?;
+            std::fs::write(&env_file, env)?;
+            for d in &dropins {
+                std::fs::create_dir_all(d.parent().expect("has parent"))?;
+                std::fs::write(
+                    d,
+                    format!("# FROGGER: face confirmation for ssh-add -c keys\n[Service]\nEnvironment={unit_env}\n"),
+                )?;
+            }
+            let _ = std::process::Command::new("systemctl")
+                .args(["--user", "daemon-reload"])
+                .stderr(std::process::Stdio::null())
+                .status();
+            println!("{}", tr(lang, "cli.ssh.enabled", &[]));
+        }
+        "disable" => {
+            for f in std::iter::once(&env_file).chain(dropins.iter()) {
+                match std::fs::remove_file(f) {
+                    Ok(()) => {}
+                    Err(e) if e.kind() == std::io::ErrorKind::NotFound => {}
+                    Err(e) => return Err(e.into()),
+                }
+            }
+            let _ = std::process::Command::new("systemctl")
+                .args(["--user", "daemon-reload"])
+                .stderr(std::process::Stdio::null())
+                .status();
+            println!("{}", tr(lang, "cli.ssh.disabled", &[]));
+        }
+        _ => {
+            let on = env_file.exists();
+            println!(
+                "{}",
+                tr(
+                    lang,
+                    if on {
+                        "cli.ssh.status_on"
+                    } else {
+                        "cli.ssh.status_off"
+                    },
+                    &[]
+                )
+            );
+        }
     }
     Ok(())
 }

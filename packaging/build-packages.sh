@@ -24,7 +24,7 @@ case "$ARCH" in
   *) echo "unsupported arch $ARCH" >&2; exit 1 ;;
 esac
 
-for f in froggerd frogger libpam_frogger.so; do
+for f in froggerd frogger frogger-askpass libpam_frogger.so; do
   [ -f "$BIN/$f" ] || { echo "missing $BIN/$f" >&2; exit 1; }
 done
 for m in face_detection_yunet_2023mar.onnx face_recognition_sface_2021dec.onnx; do
@@ -33,7 +33,7 @@ done
 
 # Minimum glibc actually required by the binaries (highest GLIBC_x symbol
 # version they reference) – never hand-maintained.
-GLIBC_MIN=$(readelf -V "$BIN/froggerd" "$BIN/frogger" "$BIN/libpam_frogger.so" \
+GLIBC_MIN=$(readelf -V "$BIN/froggerd" "$BIN/frogger" "$BIN/frogger-askpass" "$BIN/libpam_frogger.so" \
   | sed -n 's/.*Name: GLIBC_\([0-9.]*\).*/\1/p' | sort -V | tail -1)
 echo "binaries require glibc >= $GLIBC_MIN"
 
@@ -46,6 +46,7 @@ trap 'rm -rf "$WORK"' EXIT
 stage() {
   local r=$1 pamdir=$2 account=$3 pamcfg=$4
   install -Dm755 "$BIN/froggerd" "$r/usr/libexec/froggerd"
+  install -Dm755 "$BIN/frogger-askpass" "$r/usr/libexec/frogger-askpass"
   install -Dm755 "$BIN/frogger" "$r/usr/bin/frogger"
   install -Dm644 "$BIN/libpam_frogger.so" "$r$pamdir/pam_frogger.so"
   install -Dm644 -t "$r/usr/share/frogger/models" \
@@ -105,6 +106,7 @@ TARNAME=frogger-${VERSION}-${ARCH}-linux
 T=$WORK/tar/$TARNAME
 install -Dm755 "$BIN/frogger" "$T/bin/frogger"
 install -Dm755 "$BIN/froggerd" "$T/libexec/froggerd"
+install -Dm755 "$BIN/frogger-askpass" "$T/libexec/frogger-askpass"
 install -Dm644 "$BIN/libpam_frogger.so" "$T/lib/pam_frogger.so"
 install -Dm644 -t "$T/share/models" \
   "$MODEL_DIR/face_detection_yunet_2023mar.onnx" "$MODEL_DIR/face_recognition_sface_2021dec.onnx"

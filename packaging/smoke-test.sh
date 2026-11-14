@@ -29,6 +29,9 @@ frogger --help >/dev/null
 LANG=de_DE.UTF-8 frogger status 2>&1 | grep -q "froggerd" # daemon not running → localized error
 # Load models once to prove the inference engine works on this platform.
 rm -f /tmp/frogger.sock
+# SSH askpass helper: delegates non-confirm prompts, must at least run.
+ASKPASS=$(command -v /usr/libexec/frogger-askpass /usr/lib/frogger/frogger-askpass | head -1)
+FROGGER_ASKPASS_FALLBACK=/bin/echo "$ASKPASS" smoke | grep -q smoke
 DAEMON=$(command -v /usr/libexec/froggerd /usr/lib/frogger/froggerd | head -1)
 FROGGER_SOCKET=/tmp/frogger.sock timeout 20 "$DAEMON" &
 PID=$!

@@ -38,6 +38,7 @@ mkdir -p /usr/share/frogger
 : > "$MANIFEST.new"
 inst 755 bin/frogger /usr/bin/frogger
 inst 755 libexec/froggerd /usr/libexec/froggerd
+inst 755 libexec/frogger-askpass /usr/libexec/frogger-askpass
 # Follow the distribution's convention (Debian 644, Arch/Fedora 755).
 PAMMODE=$(stat -c %a "$PAMDIR/pam_unix.so" 2>/dev/null || echo 644)
 inst "$PAMMODE" lib/pam_frogger.so "$PAMDIR/pam_frogger.so"

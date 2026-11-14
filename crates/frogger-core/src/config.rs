@@ -108,6 +108,7 @@ impl Default for AuthConfig {
                 "kde-fingerprint".into(),
                 "kde-face".into(),
                 "frogger-test".into(),
+                "frogger-ssh".into(),
             ],
             login_services: vec![
                 "gdm-password".into(),

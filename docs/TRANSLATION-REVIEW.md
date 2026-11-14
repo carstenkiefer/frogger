@@ -25,6 +25,8 @@ phrases below are the least certain ones.
 - English loanwords kept: screen, service, configuration, settings, file
   permissions, encryption, profile, controls.
 - Confirmation word `cli.setup.yes_word` = "EGO" – is this the natural "yes"?
+- SSH messages (`ssh.*`, `cli.ssh.*`): "ekisumuruzo" for key, "okuhamya" for
+  confirmation, "ruga omu sisitemu ogarukemu" for log out and in again.
 
 ### Kinyarwanda
 - French loanwords "infrarouge", "ecran", "chiffrement" (alternatives:
@@ -36,3 +38,5 @@ phrases below are the least certain ones.
 - Sensitive data: "amakuru y'ibanga"; glasses: "amadarubindi agarura urumuri
   cyane"; lid closed rephrased as "the laptop is closed".
 - Confirmation word "YEGO".
+- SSH messages (`ssh.*`, `cli.ssh.*`): "urufunguzo / imfunguzo" for key(s),
+  "kwemeza" for confirmation.

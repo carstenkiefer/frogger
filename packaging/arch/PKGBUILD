@@ -47,6 +47,7 @@ package() {
   cd "$pkgname-$_tag"
   install -Dm755 target/release/frogger "$pkgdir/usr/bin/frogger"
   install -Dm755 target/release/froggerd "$pkgdir/usr/lib/frogger/froggerd"
+  install -Dm755 target/release/frogger-askpass "$pkgdir/usr/lib/frogger/frogger-askpass"
   install -Dm755 target/release/libpam_frogger.so "$pkgdir/usr/lib/security/pam_frogger.so"
   install -Dm644 -t "$pkgdir/usr/share/frogger/models" \
     "$srcdir/face_detection_yunet_2023mar.onnx" "$srcdir/face_recognition_sface_2021dec.onnx"

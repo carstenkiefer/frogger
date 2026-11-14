@@ -53,6 +53,7 @@ fi
 
 %files
 /usr/libexec/froggerd
+/usr/libexec/frogger-askpass
 /usr/bin/frogger
 %attr(0755,root,root) /usr/lib64/security/pam_frogger.so
 /usr/share/frogger
