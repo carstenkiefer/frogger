@@ -18,9 +18,24 @@ use std::time::{Duration, Instant};
 /// only sample the eyes.
 const FULL_INTERVAL: Duration = Duration::from_millis(200);
 const MAX_SAMPLES: usize = 40;
+/// Enrollment phases (time based so people can follow the prompts).
+const STRAIGHT_PHASE: Duration = Duration::from_millis(2500);
+const TURN_PHASE: Duration = Duration::from_millis(3500);
+const PHASE_LIMIT: Duration = Duration::from_secs(12);
+const SAMPLE_INTERVAL: Duration = Duration::from_millis(300);
+const MIN_ENROLL_SAMPLES: usize = 6;
+const MAX_ENROLL_SAMPLES: usize = 20;
+/// Closed-eye phase: wait up to this long for closed eyes, then record them
+/// for CLOSED_RECORD.
+const CLOSE_WAIT_LIMIT: Duration = Duration::from_secs(7);
+const CLOSED_RECORD: Duration = Duration::from_millis(1000);
+/// How far below the least similar open-eye sample a frame must be to count
+/// as closed eyes.
+const CLOSED_MARGIN: f32 = 0.05;
+/// V4L2 buffers queued by the camera (see Camera::open).
+const CAMERA_BUFFERS: usize = 4;
 /// A depth frame older than this is not used for the current IR frame.
 const DEPTH_MAX_AGE: Duration = Duration::from_millis(150);
-const ENROLL_SAMPLES: usize = 10;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Outcome {
@@ -279,6 +294,33 @@ impl Engine {
         self.attempt(&t, lang, emit)
     }
 
+    /// Next frame usable for enrollment: lit by the emitter, exactly one face,
+    /// large and bright enough. `multi` counts frames with several faces.
+    fn enroll_frame(
+        &self,
+        cam: &mut Camera,
+        infrared: bool,
+        strobe: &mut StrobeFilter,
+        multi: &mut u32,
+    ) -> Option<Analysis> {
+        let frame = cam.frame().ok()?;
+        if infrared && (frame.chroma >= 2.0 || strobe.is_off(frame.mean)) {
+            return None;
+        }
+        let a = self.pipeline.analyse(&frame.image).ok()??;
+        if a.face_count > 1 {
+            *multi += 1;
+            return None;
+        }
+        if a.face.interocular() < 28.0 {
+            return None; // too far away / too small for reliable features
+        }
+        if infrared && a.face_brightness < self.cfg.liveness.min_ir_face_brightness {
+            return None;
+        }
+        Some(a)
+    }
+
     /// Determine camera type from probe + a short capture.
     pub fn detect_kind(&self, cam: &mut Camera) -> (CameraKind, Vec<String>) {
         let stats = camera::capture_stats(cam, 10).ok();
@@ -313,45 +355,38 @@ impl Engine {
             emit(tr(lang, "enroll.rgb_warning", &[]));
         }
 
-        // Phase 1: open-eye samples from slightly varying poses.
-        emit(tr(lang, "enroll.start", &[("user", user)]));
-        let mut samples: Vec<Analysis> = Vec::new();
-        let mut last_kept = Instant::now() - Duration::from_secs(1);
-        let start = Instant::now();
-        let mut turned = false;
-        let mut multi = 0;
+        // Phase 1: open-eye samples, first looking straight, then turning the
+        // head slightly. Time based, so the person has time to follow the
+        // instructions regardless of the camera frame rate.
         let mut strobe = StrobeFilter::default();
-        while samples.len() < ENROLL_SAMPLES && start.elapsed() < Duration::from_secs(20) {
-            let Ok(frame) = cam.frame() else { continue };
-            if infrared && (frame.chroma >= 2.0 || strobe.is_off(frame.mean)) {
-                continue;
+        let mut multi = 0u32;
+        let mut samples: Vec<Analysis> = Vec::new();
+        emit(tr(lang, "enroll.start", &[("user", user)]));
+        for (phase, duration) in [(0, STRAIGHT_PHASE), (1, TURN_PHASE)] {
+            if phase == 1 {
+                emit(tr(lang, "enroll.turn", &[]));
             }
-            let Ok(Some(a)) = self.pipeline.analyse(&frame.image) else {
-                continue;
-            };
-            if a.face_count > 1 {
-                multi += 1;
-                if multi == 5 {
-                    emit(tr(lang, "enroll.multiple_faces", &[]));
-                }
-                continue;
-            }
-            if a.face.interocular() < 28.0 {
-                continue; // too far away / too small for reliable features
-            }
-            if infrared && a.face_brightness < self.cfg.liveness.min_ir_face_brightness {
-                continue;
-            }
-            if last_kept.elapsed() >= Duration::from_millis(350) {
-                samples.push(a);
-                last_kept = Instant::now();
-                if !turned && samples.len() == ENROLL_SAMPLES / 2 {
-                    turned = true;
-                    emit(tr(lang, "enroll.turn", &[]));
+            flush(&mut cam);
+            let start = Instant::now();
+            let mut last_kept = start - SAMPLE_INTERVAL;
+            let mut kept = 0;
+            // Keep going past `duration` until the phase has a few samples
+            // (face briefly lost), but never longer than PHASE_LIMIT.
+            while (start.elapsed() < duration || kept < 3) && start.elapsed() < PHASE_LIMIT {
+                let Some(a) = self.enroll_frame(&mut cam, infrared, &mut strobe, &mut multi) else {
+                    if multi == 5 {
+                        emit(tr(lang, "enroll.multiple_faces", &[]));
+                    }
+                    continue;
+                };
+                if last_kept.elapsed() >= SAMPLE_INTERVAL && samples.len() < MAX_ENROLL_SAMPLES {
+                    samples.push(a);
+                    last_kept = Instant::now();
+                    kept += 1;
                 }
             }
         }
-        if samples.len() < ENROLL_SAMPLES / 2 {
+        if samples.len() < MIN_ENROLL_SAMPLES {
             return Outcome::Failure(tr(lang, "enroll.no_face", &[]));
         }
         // Consistency: every sample must resemble the others (one person).
@@ -364,39 +399,47 @@ impl Engine {
             return Outcome::Failure(tr(lang, "enroll.inconsistent", &[]));
         }
 
-        // Phase 2: closed-eye references for the blink challenge.
-        emit(tr(lang, "enroll.close_eyes", &[]));
-        std::thread::sleep(Duration::from_millis(1200));
+        // Phase 2: closed-eye references for the blink challenge. Wait until
+        // the eyes are actually closed, record them for a moment, then ask
+        // to open them again.
         let open_eyes: Vec<EyePair> = samples.iter().map(|s| s.eyes.clone()).collect();
         let open_ref = EyePair {
             left: average(&open_eyes.iter().map(|e| e.left.as_slice()).collect::<Vec<_>>()),
             right: average(&open_eyes.iter().map(|e| e.right.as_slice()).collect::<Vec<_>>()),
         };
-        let mut closed: Vec<(f32, EyePair)> = Vec::new();
+        let eye_sim = |e: &EyePair| dot(&e.left, &open_ref.left).min(dot(&e.right, &open_ref.right));
+        let open_floor = open_eyes.iter().map(eye_sim).fold(f32::INFINITY, f32::min);
+        let closed_below = open_floor - CLOSED_MARGIN;
+        emit(tr(lang, "enroll.close_eyes", &[]));
+        flush(&mut cam);
         let phase = Instant::now();
-        while phase.elapsed() < Duration::from_millis(1600) {
-            let Ok(frame) = cam.frame() else { continue };
-            // Only lit frames of exactly one face: emitter-off frames would
-            // otherwise end up as "closed eye" references (pure noise).
-            if infrared && (frame.chroma >= 2.0 || strobe.is_off(frame.mean)) {
+        let mut closed_since: Option<Instant> = None;
+        let mut closed: Vec<(f32, EyePair)> = Vec::new();
+        while phase.elapsed() < CLOSE_WAIT_LIMIT {
+            if closed_since.is_some_and(|t| t.elapsed() >= CLOSED_RECORD) && closed.len() >= 3 {
+                break;
+            }
+            // Only lit frames of the same single person: emitter-off frames
+            // would otherwise end up as "closed eye" references (noise).
+            let Some(a) = self.enroll_frame(&mut cam, infrared, &mut strobe, &mut multi) else {
+                continue;
+            };
+            if vision::cosine(&a.embedding, &mean) < 0.5 {
                 continue;
             }
-            if let Ok(Some(a)) = self.pipeline.analyse(&frame.image) {
-                if a.face_count > 1
-                    || (infrared && a.face_brightness < self.cfg.liveness.min_ir_face_brightness)
-                    || vision::cosine(&a.embedding, &mean) < 0.5
-                {
-                    continue;
-                }
-                let sim = dot(&a.eyes.left, &open_ref.left).min(dot(&a.eyes.right, &open_ref.right));
+            let sim = eye_sim(&a.eyes);
+            if sim < closed_below {
+                closed_since.get_or_insert_with(Instant::now);
                 closed.push((sim, a.eyes));
             }
         }
         emit(tr(lang, "enroll.open_eyes", &[]));
-        // Keep the frames least similar to the open reference.
-        closed.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let keep = (closed.len() / 2).max(1).min(closed.len());
-        let closed: Vec<EyePair> = closed.into_iter().take(keep).map(|(_, e)| e).collect();
+        log::info!(
+            "enrollment of {user}: {} open samples, {} closed samples (open floor {open_floor:.3})",
+            samples.len(),
+            closed.len()
+        );
+        let closed: Vec<EyePair> = closed.into_iter().map(|(_, e)| e).collect();
         let eyes = EyeCalibration::from_samples(&open_eyes, &closed);
         if eyes.is_none() && (self.cfg.effective_liveness() == LivenessMode::Blink || !infrared) {
             return Outcome::Failure(tr(lang, "enroll.calibration_failed", &[]));
@@ -466,6 +509,14 @@ pub fn kind_name(k: CameraKind) -> &'static str {
     match k {
         CameraKind::Infrared => "infrared",
         CameraKind::Rgb | CameraKind::Unknown => "rgb",
+    }
+}
+
+/// Discard frames the driver queued while we were not reading (e.g. during a
+/// prompt), so the next frame shows the present.
+fn flush(cam: &mut Camera) {
+    for _ in 0..CAMERA_BUFFERS {
+        let _ = cam.frame();
     }
 }
 
