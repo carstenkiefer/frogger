@@ -45,6 +45,7 @@
 "cli.doctor.emitter_configured" = "Controle do emissor IR configurado."
 "cli.doctor.policy" = "Política: RGB inseguro permitido: {rgb}, dispositivo sensível: {sensitive}"
 "cli.doctor.models_missing" = "Arquivo de modelo ausente: {path}"
+"cli.doctor.emitter_dark" = "A imagem infravermelha está quase preta: o emissor IR provavelmente está desligado. Configure-o com linux-enable-ir-emitter e importe o resultado: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
 "cli.doctor.lid_closed" = "A tampa do notebook está fechada – a câmera não consegue ver você."
 "cli.doctor.daemon_ok" = "O daemon está em execução (versão {version})."
 "cli.desktop.gnome" = "GNOME: o login facial funciona na tela de login e na tela de bloqueio (serviço PAM gdm-password). Na tela de bloqueio, pressione uma tecla ou deslize para cima para iniciar o reconhecimento. O primeiro login após a inicialização pede a senha para que o chaveiro possa ser desbloqueado."

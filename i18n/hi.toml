@@ -45,6 +45,7 @@
 "cli.doctor.emitter_configured" = "IR एमिटर नियंत्रण कॉन्फ़िगर है।"
 "cli.doctor.policy" = "नीति: असुरक्षित RGB की अनुमति: {rgb}, संवेदनशील डिवाइस: {sensitive}"
 "cli.doctor.models_missing" = "मॉडल फ़ाइल नहीं मिली: {path}"
+"cli.doctor.emitter_dark" = "इन्फ्रारेड छवि लगभग काली है: IR एमिटर संभवतः बंद है। इसे linux-enable-ir-emitter से कॉन्फ़िगर करें और परिणाम आयात करें: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
 "cli.doctor.lid_closed" = "लैपटॉप का ढक्कन बंद है – कैमरा आपको नहीं देख सकता।"
 "cli.doctor.daemon_ok" = "डेमन चल रहा है (संस्करण {version})।"
 "cli.desktop.gnome" = "GNOME: चेहरा लॉगिन लॉगिन स्क्रीन और लॉक स्क्रीन पर काम करता है (PAM सेवा gdm-password)। लॉक स्क्रीन पर पहचान शुरू करने के लिए कोई कुंजी दबाएँ या ऊपर स्वाइप करें। बूट के बाद पहला लॉगिन पासवर्ड माँगता है ताकि कीरिंग अनलॉक हो सके।"
