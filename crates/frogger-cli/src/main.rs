@@ -722,6 +722,12 @@ fn other_face_modules() -> Vec<String> {
     };
     let mut hits: Vec<String> = rd
         .flatten()
+        // PAM only reads /etc/pam.d/<service>; backup copies (sudo.bak,
+        // sudo~, sudo.dpkg-old …) are never used.
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            !name.contains('.') && !name.ends_with('~')
+        })
         .filter(|e| {
             std::fs::read_to_string(e.path())
                 .map(|s| {

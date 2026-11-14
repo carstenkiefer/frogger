@@ -16,7 +16,10 @@ use std::time::{Duration, Instant};
 
 /// Interval between full analyses (detection + embedding); frames in between
 /// only sample the eyes.
-const FULL_INTERVAL: Duration = Duration::from_millis(200);
+// 400 ms leaves room for eye-only samples on slow CPUs and cameras with
+// strobing emitters (field test: ~9 lit frames/s); identity still needs
+// only ~1.2 s for three matching frames.
+const FULL_INTERVAL: Duration = Duration::from_millis(400);
 const MAX_SAMPLES: usize = 40;
 /// Enrollment phases (time based so people can follow the prompts).
 const STRAIGHT_PHASE: Duration = Duration::from_millis(2500);

@@ -148,18 +148,24 @@ fn pidfd_pid(fd: &std::os::fd::OwnedFd) -> Option<u32> {
 }
 
 /// Is the process behind the pidfd still alive? (signal 0 = existence check)
+///
+/// The daemon runs as the unprivileged `frogger` user and may not signal
+/// most requesters (sudo, gdm, other users' processes): the kernel then
+/// answers EPERM – which, as with kill(2), means the process exists. Only
+/// ESRCH means it is gone.
 fn pidfd_alive(fd: &std::os::fd::OwnedFd) -> bool {
     use std::os::fd::AsRawFd;
     // SAFETY: plain syscall with a valid fd and null siginfo.
-    unsafe {
+    let r = unsafe {
         libc::syscall(
             SYS_PIDFD_SEND_SIGNAL,
             fd.as_raw_fd(),
             0,
             std::ptr::null::<libc::c_void>(),
             0,
-        ) == 0
-    }
+        )
+    };
+    r == 0 || std::io::Error::last_os_error().raw_os_error() == Some(libc::EPERM)
 }
 
 fn peer_cred(s: &UnixStream) -> Result<Peer> {
@@ -505,6 +511,21 @@ mod tests {
             assert_eq!(pidfd_pid(&fd), Some(std::process::id()));
             assert!(pidfd_alive(&fd));
         }
+    }
+
+    #[test]
+    fn pidfd_of_process_we_may_not_signal_is_alive() {
+        // Regression: froggerd runs as `frogger` and may not signal sudo or
+        // gdm; EPERM must count as alive. PID 1 is owned by root – for a
+        // non-root test run this exercises exactly that path.
+        // SAFETY: pidfd_open(pid, 0) returns a new fd or -1.
+        let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, 1 as libc::c_int, 0) };
+        if raw < 0 {
+            return; // no pidfd support or PID 1 not visible (container)
+        }
+        let fd = unsafe { <std::os::fd::OwnedFd as std::os::fd::FromRawFd>::from_raw_fd(raw as i32) };
+        assert!(pidfd_alive(&fd));
+        assert_eq!(pidfd_pid(&fd), Some(1));
     }
 
     #[test]

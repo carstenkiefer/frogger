@@ -90,6 +90,10 @@ pub fn average(patches: &[&[f32]]) -> Vec<f32> {
 
 /// Lower bound of [`EyeCalibration::dip_threshold`].
 const MIN_DIP: f32 = 0.06;
+/// Upper bound: with a very large enrollment gap (fully closed reference
+/// eyes) a natural blink captured half-closed would otherwise never count
+/// (field test: dip 0.28 measured, 0.375 required).
+const MAX_DIP: f32 = 0.2;
 
 /// Per-user eye references recorded during enrollment.
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -173,7 +177,7 @@ impl EyeCalibration {
     /// movement. Half of the enrollment gap: a fast blink caught half-closed
     /// by the camera reaches it, sensor noise does not.
     pub fn dip_threshold(&self) -> f32 {
-        (1.5 * self.margin).max(MIN_DIP)
+        (1.5 * self.margin).clamp(MIN_DIP, MAX_DIP)
     }
 
     pub fn state(&self, p: &EyePair) -> EyeState {
