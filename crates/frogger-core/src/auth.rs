@@ -132,6 +132,14 @@ pub struct Stats {
     /// the calibrated dip when a blink is not detected.
     pub max_eye_dip: f32,
     pub max_closed_rise: f32,
+    /// Calibrated thresholds of the enrolled user (margin for "open", dip
+    /// for a blink) and the best open score seen (weaker eye).
+    pub eye_margin: f32,
+    pub eye_dip_threshold: f32,
+    pub max_open_score: Option<f32>,
+    /// Furthest blink phase reached: 0 = eyes never classified open,
+    /// 1 = open, 2 = lids moved down, 3 = blink completed.
+    pub blink_phase: u8,
     /// Brightest face seen in a frame rejected as unlit.
     pub max_dark_face_brightness: f32,
     pub colour_frames: u32,
@@ -336,6 +344,14 @@ impl<'a> Verifier<'a> {
         let score = |c: (f32, f32)| c.0 - c.1;
         let open_now = cur.iter().all(|&c| score(c) > margin);
         self.stats.eye_samples += 1;
+        self.stats.eye_margin = margin;
+        self.stats.eye_dip_threshold = dip;
+        let open_score = cur.iter().map(|&c| score(c)).fold(f32::INFINITY, f32::min);
+        self.stats.max_open_score = Some(
+            self.stats
+                .max_open_score
+                .map_or(open_score, |m| m.max(open_score)),
+        );
 
         if let Blink::Open { reference } | Blink::Closed { reference, .. } = self.blink {
             let drop = (0..2)
@@ -381,6 +397,13 @@ impl<'a> Verifier<'a> {
             }
         };
         self.stats.blink_detected = self.blink == Blink::Done;
+        let phase = match self.blink {
+            Blink::NeedOpen => 0,
+            Blink::Open { .. } => 1,
+            Blink::Closed { .. } => 2,
+            Blink::Done => 3,
+        };
+        self.stats.blink_phase = self.stats.blink_phase.max(phase);
     }
 
     /// Most specific reason why the attempt did not succeed.
