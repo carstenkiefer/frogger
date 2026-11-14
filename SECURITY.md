@@ -23,7 +23,7 @@ against.
 | Second person / photo next to the user | Frames with more than one face are discarded (`reject_multiple_faces`). |
 | Brute force / lookalikes | Strict similarity threshold, several matching frames required, lockout after `max_failures` (falls back to password). |
 | Camera replaced by another device | Camera pinning by USB vendor:product (`expected_usb_id`, written by `frogger setup`); templates remember the camera type. |
-| Remote attacker runs `sudo`/`su`/`pkexec` while the user sits at the desk | The daemon derives locality from systemd-logind for the **requesting process** (via `SO_PEERCRED`, not from client claims): remote sessions are refused; processes outside a session need a local seat session of the *real* uid and no remote session of that user (closes the `systemd-run --user` escape); the polkit helper service is only served while no remote session exists on the machine. `PAM_RHOST`/SSH variables are checked as an additional pre-filter. |
+| Remote attacker runs `sudo`/`su`/`pkexec` while the user sits at the desk | The daemon derives locality from systemd-logind for the **requesting process** (via `SO_PEERCRED`, not from client claims): remote sessions are refused; on Linux ≥ 6.5 the requesting process is pinned with a pidfd (`SO_PEERPIDFD`), so a PID reused during the check cannot be mistaken for the requester; processes outside a session need a local seat session of the *real* uid and no remote session of that user (closes the `systemd-run --user` escape); the polkit helper service is only served while no remote session exists on the machine. `PAM_RHOST`/SSH variables are checked as an additional pre-filter. |
 | Local user probing other users' faces | Unprivileged callers may only authenticate/test/remove **themselves**; enrollment requires root (i.e. a password via sudo). |
 | Malformed requests | Line-limited JSON protocol, validated user names, PAM module catches panics and never returns success on error. |
 | Daemon compromise | Runs as unprivileged `frogger` user with an extensive systemd sandbox (no network, only video devices, read-only system, no capabilities, seccomp filter). |
@@ -66,7 +66,17 @@ Face templates are biometric data. FROGGER stores only 128-dimensional
 embeddings and small normalised eye patches – no camera images – in
 `/var/lib/frogger/users/` (directory 0700, files 0600, owned by the daemon
 user). Nothing leaves the device. Purging the package deletes all templates.
-Use full-disk encryption.
+
+On devices with a TPM 2.0 chip and systemd ≥ 254, `frogger setup` seals a
+random 256-bit key to the TPM (`systemd-creds`, stored in
+`/etc/credstore.encrypted/frogger.key`). systemd decrypts it only for the
+daemon, which encrypts every template with ChaCha20-Poly1305 bound to the
+user name. A disk removed from the device – or a backup – does not reveal the
+templates. The key is bound to the TPM itself, not to PCR measurements, so
+firmware and Secure Boot updates do not break face login; clearing the TPM
+does (users then re-enroll, the password keeps working). `frogger doctor`
+shows whether encryption is active. Full-disk encryption is still
+recommended.
 
 ## Reporting vulnerabilities
 
