@@ -1,0 +1,5 @@
+# Pinned for reproducible builds; bump deliberately (new lints, codegen).
+[toolchain]
+channel = "1.97.0"
+profile = "minimal"
+components = ["clippy", "rustfmt"]

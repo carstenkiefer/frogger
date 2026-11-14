@@ -51,7 +51,7 @@ impl Image {
             return self.clone();
         }
         let mut out = Vec::with_capacity(self.width * self.height);
-        for px in self.data.chunks_exact(3) {
+        for px in self.data.as_chunks::<3>().0 {
             let y = (77 * px[0] as u32 + 150 * px[1] as u32 + 29 * px[2] as u32) >> 8;
             out.push(y as u8);
         }

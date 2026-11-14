@@ -19,11 +19,11 @@ jobs:
     name: Lint & test
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpam0g-dev libclang-dev
       - name: Rust toolchain
-        run: rustup toolchain install stable --profile minimal -c clippy,rustfmt && rustup default stable
+        run: rustup toolchain install && rustc --version
       - uses: actions/cache@v4
         with:
           path: |
@@ -52,11 +52,11 @@ jobs:
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - name: Install build dependencies
         run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpam0g-dev libclang-dev rpm
       - name: Rust toolchain
-        run: rustup toolchain install stable --profile minimal && rustup default stable
+        run: rustup toolchain install && rustc --version
       - uses: actions/cache@v4
         with:
           path: |
@@ -97,7 +97,7 @@ jobs:
         image: ["debian:trixie", "ubuntu:26.04", "fedora:latest"]
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
       - uses: actions/download-artifact@v4
         with:
           name: packages-${{ matrix.arch }}

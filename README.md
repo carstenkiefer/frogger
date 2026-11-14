@@ -9,8 +9,8 @@ log you in**.
 
 > **Status: early development.** The pipeline is tested with the real models
 > and simulated camera input, but not yet validated on a broad range of IR
-> camera hardware. Do not rely on it as the only safeguard yet; the password
-> always keeps working.
+> camera hardware ([test procedure](docs/HARDWARE-TESTING.md)). Do not rely on
+> it as the only safeguard yet; the password always keeps working.
 
 ## Highlights
 

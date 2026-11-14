@@ -272,7 +272,7 @@ pub fn decode(buf: &[u8], w: usize, h: usize, fourcc: &[u8; 4]) -> Result<Frame>
                 bail!("short Y16 frame");
             }
             // Little endian, MSB aligned → take the high byte.
-            let data = buf[..2 * n].chunks_exact(2).map(|p| p[1]).collect();
+            let data = buf[..2 * n].as_chunks::<2>().0.iter().map(|p| p[1]).collect();
             (Image::from_gray(w, h, data), 0.0)
         }
         b"YUYV" => {
@@ -281,7 +281,7 @@ pub fn decode(buf: &[u8], w: usize, h: usize, fourcc: &[u8; 4]) -> Result<Frame>
             }
             let mut y = Vec::with_capacity(n);
             let mut chroma_sum = 0u64;
-            for px in buf[..2 * n].chunks_exact(4) {
+            for px in buf[..2 * n].as_chunks::<4>().0 {
                 y.push(px[0]);
                 y.push(px[2]);
                 chroma_sum +=
@@ -322,7 +322,7 @@ pub fn decode(buf: &[u8], w: usize, h: usize, fourcc: &[u8; 4]) -> Result<Frame>
 fn rgb_chroma(img: &Image) -> f32 {
     let mut s = 0u64;
     let mut cnt = 0u64;
-    for px in img.data.chunks_exact(3).step_by(7) {
+    for px in img.data.as_chunks::<3>().0.iter().step_by(7) {
         let (r, g, b) = (px[0] as i32, px[1] as i32, px[2] as i32);
         s += ((r - g).abs() + (g - b).abs()) as u64;
         cnt += 1;
@@ -336,7 +336,7 @@ fn rgb_chroma(img: &Image) -> f32 {
 
 fn yuyv_to_rgb(buf: &[u8], w: usize, h: usize) -> Image {
     let mut out = Vec::with_capacity(w * h * 3);
-    for px in buf.chunks_exact(4) {
+    for px in buf.as_chunks::<4>().0 {
         let (u, v) = (px[1] as f32 - 128.0, px[3] as f32 - 128.0);
         for y in [px[0] as f32, px[2] as f32] {
             out.push((y + 1.402 * v).clamp(0.0, 255.0) as u8);
