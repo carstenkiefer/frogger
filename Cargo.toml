@@ -36,3 +36,9 @@ image = { version = "0.25", default-features = false, features = ["jpeg", "png"]
 lto = "thin"
 codegen-units = 1
 strip = "debuginfo"
+
+# Optimised but quick to build: used by CI for the model-based tests.
+[profile.ci]
+inherits = "release"
+lto = false
+codegen-units = 16

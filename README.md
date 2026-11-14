@@ -159,8 +159,10 @@ packaging/build-packages.sh amd64 target/release  # needs dpkg-deb, rpmbuild
 
 * **deb + rpm**: built natively on GitHub's amd64 and arm64 runners with only
   `dpkg-deb`/`rpmbuild`; every package is installed and smoke-tested in Debian
-  13, Ubuntu 26.04 and Fedora containers. Tags `v*` publish a release with
-  `SHA256SUMS`.
+  13, Ubuntu 26.04 and Fedora containers. To save runner time this happens
+  for pull requests, release tags and manual runs ("Run workflow"); plain
+  pushes to `main` only run lint and tests, docs-only changes nothing. Tags
+  `v*` publish a release with `SHA256SUMS`.
 * **No Flatpak / Snap.** FROGGER consists of a PAM module loaded by `sudo`,
   GDM and SDDM, a privileged system service and changes to `/etc/pam.d`.
   Flatpak is designed for sandboxed desktop apps and cannot install any of
