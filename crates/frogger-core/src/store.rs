@@ -5,6 +5,7 @@
 //! in files readable by the daemon user only (0600 inside a 0700 directory).
 //! Full-disk encryption is strongly recommended on top.
 
+use crate::crypto::{self, TemplateKey};
 use crate::vision::eyes::EyeCalibration;
 use anyhow::{bail, Context, Result};
 use frogger_proto::is_valid_username;
@@ -46,13 +47,47 @@ pub fn now() -> u64 {
 
 pub struct Store {
     dir: PathBuf,
+    /// Template encryption key (TPM-sealed systemd credential), if any.
+    key: Option<TemplateKey>,
 }
 
 impl Store {
     pub fn new(data_dir: &Path) -> Store {
         Store {
             dir: data_dir.join("users"),
+            key: None,
         }
+    }
+
+    pub fn with_key(data_dir: &Path, key: Option<TemplateKey>) -> Store {
+        Store {
+            dir: data_dir.join("users"),
+            key,
+        }
+    }
+
+    pub fn encrypted(&self) -> bool {
+        self.key.is_some()
+    }
+
+    /// Encrypt templates that were stored before a key existed. Returns the
+    /// number of migrated users.
+    pub fn migrate(&self) -> Result<usize> {
+        if self.key.is_none() {
+            return Ok(0);
+        }
+        let mut n = 0;
+        for user in self.users() {
+            let p = self.path(&user)?;
+            if crypto::is_sealed(&std::fs::read(&p)?) {
+                continue;
+            }
+            if let Some(t) = self.load(&user)? {
+                self.save(&t)?;
+                n += 1;
+            }
+        }
+        Ok(n)
     }
 
     fn path(&self, user: &str) -> Result<PathBuf> {
@@ -66,6 +101,17 @@ impl Store {
         let p = self.path(user)?;
         match std::fs::read(&p) {
             Ok(b) => {
+                let b = if crypto::is_sealed(&b) {
+                    let Some(key) = &self.key else {
+                        bail!(
+                            "template {} is encrypted but the key is not available (TPM changed?)",
+                            p.display()
+                        );
+                    };
+                    key.open(user, &b).with_context(|| p.display().to_string())?
+                } else {
+                    b
+                };
                 let t: UserTemplate =
                     serde_json::from_slice(&b).with_context(|| format!("parsing {}", p.display()))?;
                 if t.version != FORMAT_VERSION || t.user != user {
@@ -94,7 +140,12 @@ impl Store {
                 .truncate(true)
                 .mode(0o600)
                 .open(&tmp)?;
-            f.write_all(&serde_json::to_vec(t)?)?;
+            let plain = serde_json::to_vec(t)?;
+            let data = match &self.key {
+                Some(k) => k.seal(&t.user, &plain)?,
+                None => plain,
+            };
+            f.write_all(&data)?;
             f.sync_all()?;
         }
         std::fs::rename(&tmp, &p)?;
@@ -138,6 +189,44 @@ pub fn model_fingerprint(path: &Path) -> Result<String> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn encrypted_store_and_migration() {
+        let dir = std::env::temp_dir().join(format!("frogger-store-enc-{}", std::process::id()));
+        let t = UserTemplate {
+            version: FORMAT_VERSION,
+            user: "carol".into(),
+            model: "m".into(),
+            camera_kind: "infrared".into(),
+            camera_usb_id: None,
+            label: None,
+            samples: vec![Sample {
+                embedding: vec![0.5; 4],
+                created: 1,
+            }],
+            eyes: None,
+            created: 1,
+        };
+        // Stored in plain text first, then a key appears (setup on TPM device).
+        Store::new(&dir).save(&t).unwrap();
+        let key = TemplateKey::generate().unwrap();
+        let raw_key = *key.bytes();
+        let enc = Store::with_key(&dir, Some(key));
+        assert_eq!(enc.migrate().unwrap(), 1);
+        let raw = std::fs::read(dir.join("users/carol.json")).unwrap();
+        assert!(crypto::is_sealed(&raw));
+        assert!(!String::from_utf8_lossy(&raw).contains("infrared"));
+        assert_eq!(enc.load("carol").unwrap().unwrap().samples.len(), 1);
+        // Without the key the template is unusable, not silently ignored.
+        assert!(Store::new(&dir).load("carol").is_err());
+        // A different key cannot read it either.
+        assert!(Store::with_key(&dir, Some(TemplateKey::generate().unwrap()))
+            .load("carol")
+            .is_err());
+        let again = Store::with_key(&dir, Some(TemplateKey::from_bytes(&raw_key).unwrap()));
+        assert_eq!(again.migrate().unwrap(), 0);
+        let _ = std::fs::remove_dir_all(dir);
+    }
 
     #[test]
     fn save_load_remove() {

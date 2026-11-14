@@ -109,6 +109,59 @@ fn listener() -> Result<UnixListener> {
     Ok(l)
 }
 
+/// `SO_PEERPIDFD` (Linux >= 6.5): a pidfd for the process that connected.
+/// Same value on all architectures FROGGER supports (asm-generic).
+const SO_PEERPIDFD: libc::c_int = 77;
+/// `pidfd_send_signal` has the same number on x86_64 and aarch64.
+const SYS_PIDFD_SEND_SIGNAL: libc::c_long = 424;
+
+/// pidfd of the peer, if the kernel supports it.
+fn peer_pidfd(s: &UnixStream) -> Option<std::os::fd::OwnedFd> {
+    use std::os::fd::FromRawFd;
+    let mut fd: libc::c_int = -1;
+    let mut len = std::mem::size_of::<libc::c_int>() as libc::socklen_t;
+    // SAFETY: valid pointers to a properly sized int.
+    let r = unsafe {
+        libc::getsockopt(
+            s.as_raw_fd(),
+            libc::SOL_SOCKET,
+            SO_PEERPIDFD,
+            &mut fd as *mut _ as *mut libc::c_void,
+            &mut len,
+        )
+    };
+    // SAFETY: on success the kernel handed us a new, owned file descriptor.
+    (r == 0 && fd >= 0).then(|| unsafe { std::os::fd::OwnedFd::from_raw_fd(fd) })
+}
+
+/// PID a pidfd refers to (from /proc/self/fdinfo), `None` once it exited.
+fn pidfd_pid(fd: &std::os::fd::OwnedFd) -> Option<u32> {
+    use std::os::fd::AsRawFd;
+    let info = std::fs::read_to_string(format!("/proc/self/fdinfo/{}", fd.as_raw_fd())).ok()?;
+    let pid: i64 = info
+        .lines()
+        .find_map(|l| l.strip_prefix("Pid:"))?
+        .trim()
+        .parse()
+        .ok()?;
+    (pid > 0).then_some(pid as u32)
+}
+
+/// Is the process behind the pidfd still alive? (signal 0 = existence check)
+fn pidfd_alive(fd: &std::os::fd::OwnedFd) -> bool {
+    use std::os::fd::AsRawFd;
+    // SAFETY: plain syscall with a valid fd and null siginfo.
+    unsafe {
+        libc::syscall(
+            SYS_PIDFD_SEND_SIGNAL,
+            fd.as_raw_fd(),
+            0,
+            std::ptr::null::<libc::c_void>(),
+            0,
+        ) == 0
+    }
+}
+
 fn peer_cred(s: &UnixStream) -> Result<Peer> {
     let mut cred = libc::ucred {
         pid: 0,
@@ -211,6 +264,7 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
                 "liveness": e.cfg.effective_liveness(),
                 "allow_insecure_rgb": e.cfg.rgb_permitted(),
                 "sensitive_device": e.cfg.policy.sensitive_device,
+                "template_encryption": e.store.encrypted(),
                 "camera": e.cfg.camera.device,
                 "enrolled_users": if peer.uid == 0 { serde_json::json!(e.store.users()) } else { serde_json::Value::Null },
             });
@@ -224,7 +278,8 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
                 c.finish(AuthStatus::Denied, tr(lang, "cli.not_permitted", &[]));
                 return Ok(());
             }
-            authenticate(d, &mut c, peer, &user, &service, rhost.as_deref(), lang);
+            let pidfd = peer_pidfd(&c.stream);
+            authenticate(d, &mut c, peer, pidfd, &user, &service, rhost.as_deref(), lang);
         }
         Op::Enroll {
             user,
@@ -324,10 +379,12 @@ fn send_outcome(c: &mut Conn, o: Outcome) {
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn authenticate(
     d: &Daemon,
     c: &mut Conn,
     peer: Peer,
+    pidfd: Option<std::os::fd::OwnedFd>,
     user: &str,
     service: &str,
     rhost: Option<&str>,
@@ -350,7 +407,21 @@ fn authenticate(
     if rhost.is_some_and(|h| !h.is_empty() && h != "localhost") {
         return unavailable(c, "remote host set (PAM_RHOST)");
     }
+    // With a pidfd the identity of the requesting process is pinned: if it
+    // exits and its PID is reused while we inspect /proc/<pid>, the checks
+    // below detect it (race-free on Linux >= 6.5, PID based before).
+    if let Some(fd) = &pidfd {
+        if pidfd_pid(fd) != Some(peer.pid) {
+            return unavailable(c, "requesting process changed or exited");
+        }
+    }
     let locality = d.roots.locality(peer.pid, cfg.auth.deny_while_remote_session);
+    if pidfd
+        .as_ref()
+        .is_some_and(|fd| !pidfd_alive(fd) || pidfd_pid(fd) != Some(peer.pid))
+    {
+        return unavailable(c, "requesting process exited during the locality check");
+    }
     if !locality.is_local() {
         return unavailable(c, &format!("request is not local: {}", locality.reason()));
     }
@@ -417,4 +488,37 @@ fn authenticate(
     }
     drop(locks);
     send_outcome(c, outcome);
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn peer_pidfd_identifies_the_connecting_process() {
+        let (a, _b) = UnixStream::pair().unwrap();
+        let cred = peer_cred(&a).unwrap();
+        assert_eq!(cred.pid, std::process::id());
+        // Kernels before 6.5 have no SO_PEERPIDFD; the daemon then falls
+        // back to PID-based checks.
+        if let Some(fd) = peer_pidfd(&a) {
+            assert_eq!(pidfd_pid(&fd), Some(std::process::id()));
+            assert!(pidfd_alive(&fd));
+        }
+    }
+
+    #[test]
+    fn pidfd_of_exited_process_is_detected() {
+        let mut child = std::process::Command::new("true").spawn().unwrap();
+        // SAFETY: pidfd_open(pid, 0) returns a new fd or -1.
+        let raw = unsafe { libc::syscall(libc::SYS_pidfd_open, child.id() as libc::c_int, 0) };
+        if raw < 0 {
+            child.wait().unwrap();
+            return; // pidfd_open unsupported (kernel < 5.3)
+        }
+        let fd = unsafe { <std::os::fd::OwnedFd as std::os::fd::FromRawFd>::from_raw_fd(raw as i32) };
+        child.wait().unwrap();
+        assert!(!pidfd_alive(&fd));
+        assert_eq!(pidfd_pid(&fd), None);
+    }
 }

@@ -4,6 +4,7 @@
 pub mod auth;
 pub mod camera;
 pub mod config;
+pub mod crypto;
 pub mod engine;
 pub mod session;
 pub mod store;
