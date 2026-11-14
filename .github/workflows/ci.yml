@@ -12,9 +12,10 @@ on:
     paths-ignore: ["**.md", "docs/**", ".github/FUNDING.yml", "LICENSE-*"]
   workflow_dispatch:
 
-# A newer push supersedes a still running build of the same branch.
+# A newer push supersedes a still running build of the same branch and
+# trigger. Manual runs and pushes never cancel each other.
 concurrency:
-  group: ci-${{ github.ref }}
+  group: ci-${{ github.event_name }}-${{ github.ref }}
   cancel-in-progress: ${{ !startsWith(github.ref, 'refs/tags/') }}
 
 permissions:
@@ -50,7 +51,8 @@ jobs:
           FROGGER_MODEL_DIR="$PWD/target/models" cargo test --profile ci -p frogger-core --locked -- --ignored
 
   build:
-    name: Package (${{ matrix.arch }})
+    # GitHub appends the matrix values, e.g. "Package (amd64, ubuntu-24.04)".
+    name: Package
     needs: check
     if: github.event_name != 'push' || startsWith(github.ref, 'refs/tags/v')
     strategy:
@@ -62,31 +64,55 @@ jobs:
           - arch: arm64
             runner: ubuntu-24.04-arm
     runs-on: ${{ matrix.runner }}
+    # Built inside Ubuntu 22.04 so the binaries only need glibc 2.34 and run
+    # on Debian 12+, Ubuntu 22.04+, RHEL/Alma/Rocky 9+ and Fedora. Compiler
+    # and code generation are identical to a build on a newer system (no
+    # measurable speed difference); only the referenced glibc symbol
+    # versions are older. The plain x86-64 / armv8-a baseline is used, the
+    # inference engine selects AVX2/FMA/NEON kernels at runtime.
+    container: ubuntu:22.04
+    defaults:
+      run:
+        shell: bash
     steps:
-      - uses: actions/checkout@v5
       - name: Install build dependencies
-        run: sudo apt-get update && sudo apt-get install -y --no-install-recommends libpam0g-dev libclang-dev rpm
-      - name: Rust toolchain
-        run: rustup toolchain install && rustc --version
+        env:
+          DEBIAN_FRONTEND: noninteractive
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends build-essential libpam0g-dev libclang-dev rpm \
+            curl ca-certificates git xz-utils
+      - uses: actions/checkout@v5
+      - name: Rust toolchain (pinned by rust-toolchain.toml)
+        run: |
+          curl -fsSL https://sh.rustup.rs | sh -s -- -y --profile minimal --default-toolchain none
+          echo "$HOME/.cargo/bin" >> "$GITHUB_PATH"
+          "$HOME/.cargo/bin/rustup" toolchain install
+          "$HOME/.cargo/bin/rustc" --version
       - uses: actions/cache@v4
         with:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
             target
-          key: build-${{ matrix.arch }}-${{ hashFiles('Cargo.lock') }}
-      # Built on Ubuntu 24.04 (glibc 2.39) for the plain x86-64 / armv8-a
-      # baseline: runs on Debian 13, Ubuntu 24.04/26.04, Fedora, RHEL 10.
-      # SIMD kernels of the inference engine are selected at runtime.
+          key: build-jammy-${{ matrix.arch }}-${{ hashFiles('Cargo.lock') }}
       - name: Build
         # Embed the release version (tag without "v") into the binaries.
         env:
           FROGGER_VERSION: ${{ startsWith(github.ref, 'refs/tags/v') && github.ref_name || '' }}
         run: cargo build --release --locked --workspace
+      - name: Guard glibc baseline
+        run: |
+          need=$(readelf -V target/release/froggerd target/release/frogger target/release/libpam_frogger.so \
+            | sed -n 's/.*Name: GLIBC_\([0-9.]*\).*/\1/p' | sort -V | tail -1)
+          echo "binaries require glibc >= $need"
+          [ "$(printf '%s\n2.34\n' "$need" | sort -V | tail -1)" = "2.34" ] \
+            || { echo "::error::glibc requirement rose to $need (baseline 2.34)"; exit 1; }
       - name: Fetch models
         run: packaging/fetch-models.sh
       - name: Version
         run: |
+          git config --global --add safe.directory "$GITHUB_WORKSPACE"
           if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
           else
@@ -102,13 +128,20 @@ jobs:
           if-no-files-found: error
 
   smoke:
-    name: Install test (${{ matrix.image }}, ${{ matrix.arch }})
+    name: Install test
     needs: build
     strategy:
       fail-fast: false
       matrix:
         arch: [amd64, arm64]
-        image: ["debian:trixie", "ubuntu:26.04", "fedora:latest"]
+        image:
+          - "debian:trixie"
+          - "ubuntu:26.04"
+          - "fedora:latest"
+          # Older releases: best effort (Howdy is an alternative there).
+          - "debian:bookworm"
+          - "ubuntu:22.04"
+          - "almalinux:9"
     runs-on: ${{ matrix.arch == 'arm64' && 'ubuntu-24.04-arm' || 'ubuntu-24.04' }}
     steps:
       - uses: actions/checkout@v5
@@ -119,10 +152,47 @@ jobs:
       - name: Install and run in container
         run: docker run --rm -v "$PWD:/src" -w /src "${{ matrix.image }}" packaging/smoke-test.sh
 
+  arch:
+    # Arch Linux has no official arm64 container image; amd64 only.
+    name: Arch Linux (PKGBUILD + generic archive)
+    needs: build
+    runs-on: ubuntu-24.04
+    container: archlinux:latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/download-artifact@v4
+        with:
+          name: packages-amd64
+          path: dist
+      - name: Install build tools
+        run: pacman -Syu --noconfirm --needed base-devel cargo clang git sudo
+      - name: Build and install the PKGBUILD from this checkout
+        run: |
+          useradd -m builder
+          ver=$(sed -n 's/^_tag=\([^ ]*\).*/\1/p' packaging/arch/PKGBUILD)
+          work=/home/builder/pkg && mkdir -p "$work"
+          git config --global --add safe.directory "$PWD"
+          git archive --prefix="frogger-$ver/" -o "$work/frogger-$ver.tar.gz" HEAD
+          cp packaging/arch/PKGBUILD packaging/arch/frogger.install "$work/"
+          # Same PKGBUILD, but the source tarball comes from this checkout.
+          sed -i "s|\$pkgname-\$_tag.tar.gz::\$url/archive/refs/tags/v\$_tag.tar.gz|frogger-$ver.tar.gz|" "$work/PKGBUILD"
+          chown -R builder "$work"
+          su builder -c "cd $work && makepkg --noconfirm"
+          pacman -U --noconfirm "$work"/frogger-*.pkg.tar.zst
+          sh packaging/smoke-test.sh --installed
+          pacman -R --noconfirm frogger
+      - name: Generic archive installer
+        run: |
+          tar -C /tmp -xzf dist/frogger-*-amd64-linux.tar.gz
+          sh /tmp/frogger-*-amd64-linux/install.sh
+          sh packaging/smoke-test.sh --installed
+          sh /usr/share/frogger/uninstall.sh
+          ! command -v frogger
+
   release:
     name: Release
     if: startsWith(github.ref, 'refs/tags/v')
-    needs: smoke
+    needs: [smoke, arch]
     runs-on: ubuntu-24.04
     permissions:
       contents: write
@@ -137,4 +207,9 @@ jobs:
       - name: Publish GitHub release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" --title "FROGGER $GITHUB_REF_NAME" --generate-notes
+        # Tags with a suffix (v0.2.0-alpha, v1.0.0-rc1) become pre-releases.
+        run: |
+          pre=""
+          case "$GITHUB_REF_NAME" in *-*) pre="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/* --repo "$GITHUB_REPOSITORY" \
+            --title "FROGGER $GITHUB_REF_NAME" --generate-notes $pre

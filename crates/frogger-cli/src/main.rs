@@ -490,6 +490,7 @@ fn setup(config: &Path, socket: &str, accept_rgb: bool, no_enroll: bool, lang: &
             }
         }
     })?;
+    enable_socket();
     restart_daemon();
     // Enable PAM only once a face is enrolled successfully.
     if !no_enroll {
@@ -505,6 +506,14 @@ fn setup(config: &Path, socket: &str, accept_rgb: bool, no_enroll: bool, lang: &
         )
     );
     Ok(())
+}
+
+/// Enable and start the socket (no-op when already enabled). Needed on
+/// distributions whose packages do not enable services (Arch, Fedora presets).
+fn enable_socket() {
+    let _ = std::process::Command::new("systemctl")
+        .args(["enable", "--now", "frogger.socket"])
+        .status();
 }
 
 fn restart_daemon() {

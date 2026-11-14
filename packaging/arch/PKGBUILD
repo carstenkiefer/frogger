@@ -1,0 +1,64 @@
+# Maintainer: FROGGER maintainers
+# Arch Linux / AUR package, built from source.
+# Release workflow: set _tag, run `updpkgsums`, test with `makepkg -si`.
+
+pkgname=frogger
+_tag=0.2.0-alpha            # git tag without "v"
+pkgver=${_tag//-/}         # pacman versions cannot contain "-": 0.2.0alpha < 0.2.0
+pkgrel=1
+pkgdesc="Face authentication with IR cameras (Windows-Hello-like) for login, lock screen, sudo and polkit"
+arch=('x86_64' 'aarch64')
+url="https://github.com/carstenkiefer/frogger"
+license=('MIT OR Apache-2.0')
+depends=('glibc' 'gcc-libs' 'pam' 'systemd')
+makedepends=('cargo' 'clang')
+optdepends=('linux-enable-ir-emitter: switch on the IR emitter of cameras that need it')
+install=frogger.install
+options=('!lto')
+source=("$pkgname-$_tag.tar.gz::$url/archive/refs/tags/v$_tag.tar.gz"
+        "face_detection_yunet_2023mar.onnx::https://huggingface.co/opencv/face_detection_yunet/resolve/main/face_detection_yunet_2023mar.onnx"
+        "face_recognition_sface_2021dec.onnx::https://huggingface.co/opencv/face_recognition_sface/resolve/main/face_recognition_sface_2021dec.onnx")
+noextract=('face_detection_yunet_2023mar.onnx' 'face_recognition_sface_2021dec.onnx')
+sha256sums=('SKIP'
+            '8f2383e4dd3cfbb4553ea8718107fc0423210dc964f9f4280604804ed2552fa4'
+            '0ba9fbfa01b5270c96627c4ef784da859931e02f04419c829e83484087c34e79')
+
+prepare() {
+  cd "$pkgname-$_tag"
+  # Use the distribution's Rust instead of the pinned rustup toolchain.
+  rm -f rust-toolchain.toml
+  export RUSTUP_TOOLCHAIN=stable
+  cargo fetch --locked --target "$(rustc -vV | sed -n 's/host: //p')"
+}
+
+build() {
+  cd "$pkgname-$_tag"
+  export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target FROGGER_VERSION="v$_tag"
+  cargo build --frozen --release --workspace
+}
+
+check() {
+  cd "$pkgname-$_tag"
+  export RUSTUP_TOOLCHAIN=stable CARGO_TARGET_DIR=target
+  cargo test --frozen --workspace
+}
+
+package() {
+  cd "$pkgname-$_tag"
+  install -Dm755 target/release/frogger "$pkgdir/usr/bin/frogger"
+  install -Dm755 target/release/froggerd "$pkgdir/usr/lib/frogger/froggerd"
+  install -Dm755 target/release/libpam_frogger.so "$pkgdir/usr/lib/security/pam_frogger.so"
+  install -Dm644 -t "$pkgdir/usr/share/frogger/models" \
+    "$srcdir/face_detection_yunet_2023mar.onnx" "$srcdir/face_recognition_sface_2021dec.onnx"
+  install -Dm644 packaging/config.toml "$pkgdir/usr/share/frogger/config.toml.example"
+  install -d "$pkgdir/usr/share/frogger/pam.d"
+  sed 's/@ACCOUNT@/system-auth/' packaging/pam.d/kde-face > "$pkgdir/usr/share/frogger/pam.d/kde-face"
+  # Arch has no /usr/libexec: point the unit at /usr/lib/frogger.
+  install -d "$pkgdir/usr/lib/systemd/system"
+  sed 's|/usr/libexec/froggerd|/usr/lib/frogger/froggerd|' packaging/systemd/frogger.service \
+    > "$pkgdir/usr/lib/systemd/system/frogger.service"
+  install -Dm644 packaging/systemd/frogger.socket "$pkgdir/usr/lib/systemd/system/frogger.socket"
+  install -Dm644 packaging/sysusers.d/frogger.conf "$pkgdir/usr/lib/sysusers.d/frogger.conf"
+  install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname" README.md SECURITY.md THIRD_PARTY.md
+  install -Dm644 -t "$pkgdir/usr/share/licenses/$pkgname" LICENSE-MIT LICENSE-APACHE
+}
