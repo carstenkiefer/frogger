@@ -38,7 +38,7 @@ log you in**.
 | Ubuntu 26.04 LTS (GNOME 50, sudo-rs) / Kubuntu 26.04 (Plasma 6.6) | primary target |
 | Debian 13 "trixie" (GNOME 48 / Plasma 6.3) | primary target |
 | Ubuntu 24.04, Fedora 41+, RHEL 10 and derivatives | packages provided, PAM set up manually on RPM systems |
-| Cameras | V4L2/UVC devices (GREY, Y16, YUYV, MJPG). MIPI/IPU6 cameras need a V4L2 bridge (libcamera/v4l2loopback). |
+| Cameras | V4L2/UVC devices (GREY, Y16, YUYV, MJPG), IR emitters that are always on or strobe (every n-th frame lit), combined RGB+IR laptop cameras. MIPI/IPU6 cameras need a V4L2 bridge (libcamera/v4l2loopback). |
 
 ## Installation
 

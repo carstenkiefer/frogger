@@ -491,10 +491,11 @@ fn setup(config: &Path, socket: &str, accept_rgb: bool, no_enroll: bool, lang: &
         }
     })?;
     restart_daemon();
-    pam_toggle(true, lang)?;
+    // Enable PAM only once a face is enrolled successfully.
     if !no_enroll {
         enroll(socket, target_user(None)?, None, accept, lang)?;
     }
+    pam_toggle(true, lang)?;
     println!(
         "{}",
         tr(

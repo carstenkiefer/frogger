@@ -2,7 +2,7 @@
 //! diagnostics. Owned by the daemon; one operation at a time (the camera is a
 //! single shared resource).
 
-use crate::auth::{FailReason, Observation, Progress, Verifier};
+use crate::auth::{FailReason, Observation, Progress, StrobeFilter, Verifier};
 use crate::camera::{self, Camera, CameraKind};
 use crate::config::{Config, LivenessMode};
 use crate::store::{self, Sample, Store, UserTemplate, FORMAT_VERSION};
@@ -74,7 +74,9 @@ impl Engine {
         if infrared && kind == CameraKind::Unknown {
             kind = CameraKind::Infrared; // verified per frame via chroma
         }
-        let mut verifier = Verifier::new(&self.cfg, template, infrared && kind != CameraKind::Rgb);
+        let ir = infrared && kind != CameraKind::Rgb;
+        let mut verifier = Verifier::new(&self.cfg, template, ir);
+        let mut strobe = StrobeFilter::default();
         let timeout = Duration::from_secs_f32(self.cfg.auth.timeout_secs);
         let mut last_full: Option<(Instant, Analysis)> = None;
         let mut prompted_blink = false;
@@ -88,6 +90,17 @@ impl Engine {
                 }
             };
             let t = start.elapsed().as_secs_f32();
+            // Off phase of a strobing emitter: skip before spending CPU on it.
+            if ir && strobe.is_off(frame.mean) {
+                verifier.feed(&Observation {
+                    t,
+                    chroma: frame.chroma,
+                    analysis: None,
+                    eyes_only: None,
+                    emitter_off: true,
+                });
+                continue;
+            }
             let full_due = last_full
                 .as_ref()
                 .map(|(at, _)| at.elapsed() >= FULL_INTERVAL)
@@ -100,6 +113,7 @@ impl Engine {
                     chroma: frame.chroma,
                     analysis,
                     eyes_only: None,
+                    emitter_off: false,
                 }
             } else {
                 let (_, a) = last_full.as_ref().expect("checked above");
@@ -108,6 +122,7 @@ impl Engine {
                     chroma: frame.chroma,
                     analysis: None,
                     eyes_only: Some(vision::eye_sample(&frame.image, a)),
+                    emitter_off: false,
                 }
             };
             match verifier.feed(&obs) {
@@ -234,9 +249,10 @@ impl Engine {
         let start = Instant::now();
         let mut turned = false;
         let mut multi = 0;
+        let mut strobe = StrobeFilter::default();
         while samples.len() < ENROLL_SAMPLES && start.elapsed() < Duration::from_secs(20) {
             let Ok(frame) = cam.frame() else { continue };
-            if infrared && frame.chroma >= 2.0 {
+            if infrared && (frame.chroma >= 2.0 || strobe.is_off(frame.mean)) {
                 continue;
             }
             let Ok(Some(a)) = self.pipeline.analyse(&frame.image) else {
@@ -289,7 +305,18 @@ impl Engine {
         let phase = Instant::now();
         while phase.elapsed() < Duration::from_millis(1600) {
             let Ok(frame) = cam.frame() else { continue };
+            // Only lit frames of exactly one face: emitter-off frames would
+            // otherwise end up as "closed eye" references (pure noise).
+            if infrared && (frame.chroma >= 2.0 || strobe.is_off(frame.mean)) {
+                continue;
+            }
             if let Ok(Some(a)) = self.pipeline.analyse(&frame.image) {
+                if a.face_count > 1
+                    || (infrared && a.face_brightness < self.cfg.liveness.min_ir_face_brightness)
+                    || vision::cosine(&a.embedding, &mean) < 0.5
+                {
+                    continue;
+                }
                 let sim = dot(&a.eyes.left, &open_ref.left).min(dot(&a.eyes.right, &open_ref.right));
                 closed.push((sim, a.eyes));
             }

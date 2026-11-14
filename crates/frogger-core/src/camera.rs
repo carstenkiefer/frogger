@@ -127,11 +127,24 @@ pub fn probe(path: &Path) -> Result<CameraInfo> {
 }
 
 /// `/dev/v4l/by-id/*` alias pointing at `path`.
+///
+/// `by-path` is preferred: it contains the USB interface number and is
+/// therefore unique. `by-id` is only built from the serial number, so the RGB
+/// and IR halves of a combined laptop camera compete for the same link and it
+/// may point to either device after a reboot.
 pub fn stable_alias(path: &Path) -> Option<PathBuf> {
     let target = std::fs::canonicalize(path).ok()?;
-    for e in std::fs::read_dir("/dev/v4l/by-id").ok()?.flatten() {
-        if std::fs::canonicalize(e.path()).ok().as_deref() == Some(target.as_path()) {
-            return Some(e.path());
+    for dir in ["/dev/v4l/by-path", "/dev/v4l/by-id"] {
+        let Ok(rd) = std::fs::read_dir(dir) else { continue };
+        let mut links: Vec<PathBuf> = rd.flatten().map(|e| e.path()).collect();
+        links.sort();
+        // Skip legacy duplicates ("-usbv2-") when a plain link exists.
+        links.sort_by_key(|l| l.to_string_lossy().contains("usbv2"));
+        if let Some(l) = links
+            .into_iter()
+            .find(|l| std::fs::canonicalize(l).ok().as_deref() == Some(target.as_path()))
+        {
+            return Some(l);
         }
     }
     None
@@ -246,15 +259,41 @@ impl Camera {
 
 fn resolve_device(cfg: &CameraConfig) -> Result<PathBuf> {
     if cfg.device != "auto" {
-        return Ok(PathBuf::from(&cfg.device));
+        let p = PathBuf::from(&cfg.device);
+        // Re-resolve when the configured node vanished (external camera on
+        // another port) or now points at a colour camera (ambiguous by-id
+        // link of combined RGB+IR laptop cameras, which share one USB id).
+        let colour = p.exists() && probe(&p).map(|i| i.kind == CameraKind::Rgb).unwrap_or(false);
+        if cfg.expected_usb_id.is_none() || (p.exists() && !colour) {
+            return Ok(p);
+        }
+        log::warn!(
+            "{} {}, searching for IR camera {:?}",
+            cfg.device,
+            if colour { "is a colour camera" } else { "not found" },
+            cfg.expected_usb_id
+        );
     }
     let cams = list_cameras();
-    cams.iter()
+    // With a pinned USB id only that camera qualifies; never fall back to an
+    // arbitrary (e.g. RGB) device.
+    let candidates: Vec<&CameraInfo> = cams
+        .iter()
+        .filter(|c| cfg.expected_usb_id.is_none() || c.usb_id == cfg.expected_usb_id)
+        .collect();
+    let best = candidates
+        .iter()
         .find(|c| c.kind == CameraKind::Infrared)
-        .or_else(|| cams.iter().find(|c| c.kind == CameraKind::Unknown))
-        .or_else(|| cams.first())
-        .map(|c| c.stable_path.clone().unwrap_or_else(|| c.path.clone()))
-        .context("no camera found")
+        .or_else(|| candidates.iter().find(|c| c.kind == CameraKind::Unknown))
+        .or_else(|| {
+            if cfg.expected_usb_id.is_none() {
+                candidates.first()
+            } else {
+                None
+            }
+        })
+        .context("no camera found")?;
+    Ok(best.stable_path.clone().unwrap_or_else(|| best.path.clone()))
 }
 
 /// Decode a raw V4L2 buffer.

@@ -31,6 +31,32 @@ pub struct Observation {
     /// Eye-only measurement at the last known face position, used between
     /// full analyses so short blinks are not missed on slow CPUs.
     pub eyes_only: Option<EyeSample>,
+    /// Frame taken while a strobing IR emitter was off. Carries no evidence
+    /// either way and is ignored (see [`StrobeFilter`]).
+    pub emitter_off: bool,
+}
+
+/// Recognises the "off" frames of IR emitters that strobe (many laptop IR
+/// cameras light every second frame): a frame much darker than the recent
+/// maximum is an off frame.
+#[derive(Default)]
+pub struct StrobeFilter {
+    recent: std::collections::VecDeque<f32>,
+}
+
+impl StrobeFilter {
+    const WINDOW: usize = 4;
+    const RATIO: f32 = 0.7;
+
+    /// Feed the mean brightness of a frame; returns true for an off frame.
+    pub fn is_off(&mut self, mean: f32) -> bool {
+        let max = self.recent.iter().cloned().fold(0.0f32, f32::max);
+        if self.recent.len() == Self::WINDOW {
+            self.recent.pop_front();
+        }
+        self.recent.push_back(mean);
+        max > 0.0 && mean < max * Self::RATIO
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize)]
@@ -84,6 +110,8 @@ pub struct Stats {
     pub matching_frames: u32,
     pub multi_face_frames: u32,
     pub dark_frames: u32,
+    pub emitter_off_frames: u32,
+    pub lit_face_frames: u32,
     pub colour_frames: u32,
     pub track_breaks: u32,
     pub blink_detected: bool,
@@ -98,9 +126,15 @@ pub struct Verifier<'a> {
     track_matches: u32,
     track_best: f32,
     last_sim: f32,
+    /// Consecutive analysed frames without a face.
+    missing: u32,
     blink: Blink,
     pub stats: Stats,
 }
+
+/// Analysed frames without a face tolerated before the track is dropped
+/// (motion blur, a frame the detector misses).
+const MAX_MISSING: u32 = 2;
 
 /// Similarity below which an open-eyed face is treated as a *different*
 /// person and breaks the track.
@@ -130,6 +164,7 @@ impl<'a> Verifier<'a> {
             track_matches: 0,
             track_best: 0.0,
             last_sim: 0.0,
+            missing: 0,
             blink: Blink::NeedOpen,
             stats: Stats::default(),
         }
@@ -162,14 +197,17 @@ impl<'a> Verifier<'a> {
             self.reset_track();
             return Progress::Continue;
         }
+        if obs.emitter_off {
+            self.stats.emitter_off_frames += 1;
+            return Progress::Continue;
+        }
         if let (None, Some(e)) = (&obs.analysis, &obs.eyes_only) {
             self.feed_eyes(obs.t, e);
             return Progress::Continue;
         }
         let Some(a) = &obs.analysis else {
-            // Strobing emitters deliver dark frames in between; a missing face
-            // only breaks the track if it persists for two frames.
-            if self.last_face.take().is_none() {
+            self.missing += 1;
+            if self.missing > MAX_MISSING {
                 self.reset_track();
             }
             return Progress::Continue;
@@ -181,10 +219,14 @@ impl<'a> Verifier<'a> {
             return Progress::Continue;
         }
         if self.infrared && a.face_brightness < lv.min_ir_face_brightness {
+            // Not lit by the emitter: a screen (black in IR) or an emitter
+            // off phase. Such a frame proves nothing, so it is ignored – it
+            // can neither contribute to nor reset a track.
             self.stats.dark_frames += 1;
-            self.reset_track();
             return Progress::Continue;
         }
+        self.missing = 0;
+        self.stats.lit_face_frames += 1;
         if let Some(prev) = &self.last_face {
             if prev.iou(&a.face) < lv.min_track_iou {
                 self.reset_track();
@@ -238,7 +280,6 @@ impl<'a> Verifier<'a> {
         }
         if self.infrared && e.face_brightness < self.cfg.liveness.min_ir_face_brightness {
             self.stats.dark_frames += 1;
-            self.reset_track();
             return;
         }
         let state = match (&self.template.eyes, self.mode) {
@@ -281,7 +322,7 @@ impl<'a> Verifier<'a> {
             FailReason::NoFace
         } else if s.multi_face_frames * 2 >= s.frames_with_face {
             FailReason::MultipleFaces
-        } else if s.dark_frames * 2 >= s.frames_with_face {
+        } else if s.lit_face_frames == 0 && s.dark_frames > 0 {
             FailReason::NotIlluminated
         } else if s.matching_frames >= self.cfg.auth.min_matching_frames {
             FailReason::NoBlink
@@ -351,6 +392,7 @@ mod tests {
             t,
             chroma: 0.0,
             eyes_only: None,
+            emitter_off: false,
             analysis: Some(Analysis {
                 face: face(x),
                 face_count: 1,
@@ -464,6 +506,7 @@ mod tests {
                 eyes: eye(e),
                 face_brightness: 120.0,
             }),
+            emitter_off: false,
         };
         let seq = [
             obs(0.0, 0.1, OPEN, 100.0),
@@ -477,6 +520,81 @@ mod tests {
         // Eye frames without any analysed face are ignored.
         let seq2 = [eyes(0.0, OPEN), eyes(0.1, CLOSED), eyes(0.2, OPEN)];
         assert_eq!(run(&cfg, &seq2).0, Progress::Continue);
+    }
+
+    fn off(t: f32) -> Observation {
+        Observation {
+            t,
+            chroma: 0.0,
+            analysis: None,
+            eyes_only: None,
+            emitter_off: true,
+        }
+    }
+
+    fn dark(mut o: Observation) -> Observation {
+        o.analysis.as_mut().unwrap().face_brightness = 5.0;
+        o
+    }
+
+    #[test]
+    fn strobing_emitter_still_succeeds() {
+        // Every second frame is an emitter-off frame, either filtered before
+        // analysis or analysed with a dark face.
+        let cfg = Config::default();
+        let seq = [
+            obs(0.00, 0.1, OPEN, 100.0),
+            off(0.03),
+            obs(0.07, 0.1, OPEN, 101.0),
+            dark(obs(0.10, 0.1, OPEN, 101.0)),
+            obs(0.13, 0.1, OPEN, 101.0),
+            off(0.17),
+            obs(0.20, 0.6, CLOSED, 102.0),
+            dark(obs(0.23, 0.1, CLOSED, 102.0)),
+            obs(0.27, 0.1, OPEN, 102.0),
+        ];
+        assert!(matches!(run(&cfg, &seq).0, Progress::Success { .. }));
+    }
+
+    #[test]
+    fn photo_swap_hidden_in_dark_frame_is_detected() {
+        // The swap happens while the emitter is off; continuity is still
+        // checked against the last lit frame.
+        let cfg = Config::default();
+        let seq = [
+            obs(0.0, 0.1, OPEN, 100.0),
+            obs(0.1, 0.1, OPEN, 100.0),
+            obs(0.2, 0.1, OPEN, 100.0),
+            off(0.25),
+            obs(0.3, 0.1, CLOSED, 260.0),
+            off(0.35),
+            obs(0.4, 0.1, OPEN, 100.0),
+        ];
+        assert!(!matches!(run(&cfg, &seq).0, Progress::Success { .. }));
+    }
+
+    #[test]
+    fn screen_only_reports_not_illuminated() {
+        let cfg = Config::default();
+        let seq: Vec<Observation> = (0..10)
+            .map(|i| dark(obs(i as f32 * 0.1, 0.1, OPEN, 100.0)))
+            .collect();
+        let (p, r) = run(&cfg, &seq);
+        assert_eq!(p, Progress::Continue);
+        assert_eq!(r, FailReason::NotIlluminated);
+    }
+
+    #[test]
+    fn strobe_filter_flags_off_frames() {
+        let mut f = StrobeFilter::default();
+        let flags: Vec<bool> = [120.0, 30.0, 118.0, 32.0, 121.0, 29.0]
+            .iter()
+            .map(|&m| f.is_off(m))
+            .collect();
+        assert_eq!(flags, vec![false, true, false, true, false, true]);
+        // A steady camera never produces off frames.
+        let mut g = StrobeFilter::default();
+        assert!((0..20).all(|i| !g.is_off(100.0 + (i % 3) as f32)));
     }
 
     #[test]
