@@ -183,8 +183,14 @@ jobs:
           # Same PKGBUILD, but the source tarball comes from this checkout.
           sed -i "s|\$pkgname-\$_tag.tar.gz::\$url/archive/refs/tags/v\$_tag.tar.gz|frogger-$ver.tar.gz|" "$work/PKGBUILD"
           chown -R builder "$work"
-          su builder -c "cd $work && makepkg --noconfirm"
+          # The tests already ran in "Lint & test": skip check() (a second,
+          # debug build) and use a light release profile. Building both with
+          # full LTO exhausted the runner's disk/memory and killed the job.
+          su builder -c "cd $work && CARGO_PROFILE_RELEASE_LTO=false CARGO_PROFILE_RELEASE_CODEGEN_UNITS=16 \
+            makepkg --noconfirm --nocheck"
+          df -h / | tail -1
           pacman -U --noconfirm "$work"/frogger-*.pkg.tar.zst
+          rm -rf "$work/src" /home/builder/.cargo
           sh packaging/smoke-test.sh --installed
           pacman -R --noconfirm frogger
       - name: Generic archive installer
