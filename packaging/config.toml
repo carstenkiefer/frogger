@@ -33,6 +33,18 @@ skip_when_lid_closed = true
 # Refuse face auth while the requesting user is also logged in via SSH.
 deny_while_remote_session = true
 
+[camera.depth]
+# EXPERIMENTAL: depth camera (e.g. Intel RealSense) as additional liveness
+# check – the face must show relief on both axes (a photo is flat; paper can
+# only be bent around one axis).
+#   "off"      – ignore depth sensors (default)
+#   "auto"     – use one if present; flat faces are rejected, missing depth
+#                data falls back to IR + blink
+#   "required" – face login only with confirmed depth
+mode = "off"
+device = "auto"
+min_relief_mm = 8.0
+
 [liveness]
 # "blink": IR + blink challenge (recommended, defeats photos and screens)
 # "ir-only": IR only – printed IR photos are not reliably rejected!

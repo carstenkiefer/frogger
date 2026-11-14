@@ -38,6 +38,43 @@ pub struct CameraConfig {
     /// Optional "vendor:product" the device must report (camera pinning).
     /// Written by `frogger setup`; makes swapping in another camera fail.
     pub expected_usb_id: Option<String>,
+    /// Experimental: depth camera (e.g. Intel RealSense) as additional
+    /// liveness evidence.
+    pub depth: DepthConfig,
+}
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "kebab-case")]
+pub enum DepthMode {
+    /// Ignore depth sensors (default).
+    Off,
+    /// Use a depth sensor when present: a flat face (photo) resets the
+    /// challenge. Without valid depth data behaviour equals `off`.
+    Auto,
+    /// Require a three-dimensional face confirmed by depth data; without a
+    /// working depth sensor face authentication is unavailable.
+    Required,
+}
+
+#[derive(Clone, Debug, Serialize, Deserialize)]
+#[serde(default, deny_unknown_fields)]
+pub struct DepthConfig {
+    pub mode: DepthMode,
+    /// Depth node (V4L2, format Z16) or `auto`: the depth node of the same
+    /// USB device as the IR camera.
+    pub device: String,
+    /// Minimum nose prominence (mm) on both face axes.
+    pub min_relief_mm: f32,
+}
+
+impl Default for DepthConfig {
+    fn default() -> Self {
+        DepthConfig {
+            mode: DepthMode::Off,
+            device: "auto".into(),
+            min_relief_mm: 8.0,
+        }
+    }
 }
 
 impl Default for CameraConfig {
@@ -49,6 +86,7 @@ impl Default for CameraConfig {
             warmup_frames: 4,
             emitter: None,
             expected_usb_id: None,
+            depth: DepthConfig::default(),
         }
     }
 }
@@ -224,6 +262,14 @@ impl Config {
         anyhow::ensure!(
             a.min_matching_frames >= 1,
             "auth.min_matching_frames must be >= 1"
+        );
+        anyhow::ensure!(
+            (2.0..=40.0).contains(&self.camera.depth.min_relief_mm),
+            "camera.depth.min_relief_mm out of range (2..40)"
+        );
+        anyhow::ensure!(
+            (2.0..=40.0).contains(&self.camera.depth.min_relief_mm),
+            "camera.depth.min_relief_mm out of range (2..40)"
         );
         anyhow::ensure!(
             (0.3..=0.99).contains(&self.models.detection_threshold),

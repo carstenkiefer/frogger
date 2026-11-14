@@ -19,6 +19,7 @@ against.
 |---|---|
 | Photo/video on a phone, tablet or monitor | IR camera required. LCD/OLED screens emit no near-infrared light, so the face appears black under the IR emitter (`min_ir_face_brightness`). Colour frames on an IR camera are rejected (`NotInfrared`). |
 | Printed photo (also printed from an IR image) | **Blink challenge**: within one continuous face track the eyes must go open → closed → open, measured against the user's own eye calibration recorded at enrollment. A static print cannot blink. |
+| Printed photo in front of a depth camera (experimental, `camera.depth`) | The nose tip must be closer than cheeks **and** forehead/chin. A flat or tilted print shows no relief (symmetric sample points cancel a plane); paper can only be bent around one axis, so a curved print fakes relief on one axis at most. In `auto` mode missing depth data falls back to IR + blink, `required` demands confirmed depth. |
 | Swapping two prints (eyes open / eyes closed) | The challenge is bound to a continuous track: a jump of the face box (IoU < `min_track_iou`), a lost face or a different identity resets all evidence. The identity must also match before *and* after the blink. |
 | Second person / photo next to the user | Frames with more than one face are discarded (`reject_multiple_faces`). |
 | Brute force / lookalikes | Strict similarity threshold, several matching frames required, lockout after `max_failures` (falls back to password). |
@@ -30,6 +31,9 @@ against.
 
 ## Residual risks (out of scope / not solved)
 
+* **Depth check limits (experimental).** A print folded into a cone (apex at
+  the nose) or a 3D mask can show relief; the depth check complements, not
+  replaces, IR and blink liveness.
 * **3D masks and sophisticated prosthetics.** No consumer IR camera without a
   depth sensor can reliably reject a well-made 3D mask; neither can Windows
   Hello on most devices.

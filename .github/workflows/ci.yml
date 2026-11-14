@@ -118,7 +118,10 @@ jobs:
             echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_ENV"
           else
             base=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
-            echo "VERSION=${base}~git$(date -u +%Y%m%d).$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
+            # Commit time down to the second keeps development builds in order
+            # (the abbreviated hash alone sorts randomly).
+            stamp=$(TZ=UTC git log -1 --format=%cd --date=format-local:%Y%m%d%H%M%S)
+            echo "VERSION=${base}~git${stamp}.$(git rev-parse --short HEAD)" >> "$GITHUB_ENV"
           fi
       - name: Build packages
         run: packaging/build-packages.sh ${{ matrix.arch }} target/release dist

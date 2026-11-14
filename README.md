@@ -31,6 +31,10 @@ log you in**.
   Melayu, Ikinyarwanda, Runyankore – chosen from
   `LANGUAGE`/`LC_ALL`/`LC_MESSAGES`/`LANG` of the caller (Runyankore has no
   glibc locale: use `LANGUAGE=nyn`).
+* **Depth cameras (experimental):** with an Intel RealSense or another V4L2
+  depth camera (`Z16`), `camera.depth.mode = "auto"` additionally rejects
+  flat faces; `"required"` demands depth confirmation. Off by default until
+  validated on real hardware.
 * **SSH, securely:** confirm every use of your SSH keys with your face on
   the laptop (`frogger ssh enable`, `ssh-add -c`), including `sudo` on
   servers via `pam_ssh_agent_auth` – see [docs/SSH.md](docs/SSH.md).

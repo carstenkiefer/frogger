@@ -15,8 +15,9 @@
 //! A track breaks when the face disappears, jumps (IoU below threshold) or a
 //! clearly different identity appears; a break resets all evidence.
 
-use crate::config::{Config, LivenessMode};
+use crate::config::{Config, DepthMode, LivenessMode};
 use crate::store::UserTemplate;
+use crate::vision::depth::DepthVerdict;
 use crate::vision::eyes::EyeState;
 use crate::vision::{cosine, Analysis, EyeSample, Face};
 use serde::Serialize;
@@ -34,6 +35,9 @@ pub struct Observation {
     /// Frame taken while a strobing IR emitter was off. Carries no evidence
     /// either way and is ignored (see [`StrobeFilter`]).
     pub emitter_off: bool,
+    /// Depth measurement of the analysed face (experimental, only with a
+    /// depth camera and `camera.depth.mode` != off).
+    pub depth: Option<DepthVerdict>,
 }
 
 /// Recognises the "off" frames of IR emitters that strobe (many laptop IR
@@ -68,6 +72,9 @@ pub enum FailReason {
     NotIlluminated,
     MultipleFaces,
     NotInfrared,
+    /// Depth data shows a flat surface (photo) or, in `required` mode, no
+    /// valid depth confirmation was obtained.
+    NotThreeDimensional,
 }
 
 impl FailReason {
@@ -80,6 +87,7 @@ impl FailReason {
             FailReason::NotIlluminated => "auth.not_illuminated",
             FailReason::MultipleFaces => "auth.multiple_faces",
             FailReason::NotInfrared => "auth.not_infrared",
+            FailReason::NotThreeDimensional => "auth.not_3d",
         }
     }
 }
@@ -117,6 +125,11 @@ pub struct Stats {
     pub mean_face_brightness: f32,
     /// Brightest face seen in a frame rejected as unlit.
     pub max_dark_face_brightness: f32,
+    pub depth_live_frames: u32,
+    pub depth_flat_frames: u32,
+    pub depth_invalid_frames: u32,
+    /// Largest nose prominence measured (mm, horizontal / vertical axis).
+    pub depth_relief_mm: Option<(f32, f32)>,
     pub colour_frames: u32,
     pub track_breaks: u32,
     pub blink_detected: bool,
@@ -133,6 +146,8 @@ pub struct Verifier<'a> {
     last_sim: f32,
     /// Consecutive analysed frames without a face.
     missing: u32,
+    /// The current track was confirmed three-dimensional by depth data.
+    track_depth_live: bool,
     blink: Blink,
     pub stats: Stats,
 }
@@ -170,6 +185,7 @@ impl<'a> Verifier<'a> {
             track_best: 0.0,
             last_sim: 0.0,
             missing: 0,
+            track_depth_live: false,
             blink: Blink::NeedOpen,
             stats: Stats::default(),
         }
@@ -181,6 +197,7 @@ impl<'a> Verifier<'a> {
         }
         self.track_matches = 0;
         self.track_best = 0.0;
+        self.track_depth_live = false;
         self.blink = Blink::NeedOpen;
         self.last_face = None;
     }
@@ -242,6 +259,31 @@ impl<'a> Verifier<'a> {
         }
         self.last_face = Some(a.face.clone());
 
+        let mut depth_live = false;
+        match obs.depth {
+            Some(DepthVerdict::Flat {
+                horizontal_mm,
+                vertical_mm,
+            }) => {
+                // A flat (or singly curved) face in front of a depth camera:
+                // photo. Drop all evidence of this track.
+                self.stats.depth_flat_frames += 1;
+                self.note_relief(horizontal_mm, vertical_mm);
+                self.reset_track();
+                return Progress::Continue;
+            }
+            Some(DepthVerdict::Live {
+                horizontal_mm,
+                vertical_mm,
+            }) => {
+                self.stats.depth_live_frames += 1;
+                self.note_relief(horizontal_mm, vertical_mm);
+                depth_live = true;
+            }
+            Some(DepthVerdict::Invalid) => self.stats.depth_invalid_frames += 1,
+            None => {}
+        }
+
         let eye_state = match (&self.template.eyes, self.mode) {
             (Some(cal), LivenessMode::Blink) => cal.state(&a.eyes),
             _ => EyeState::Unknown,
@@ -252,6 +294,7 @@ impl<'a> Verifier<'a> {
         let threshold = self.cfg.auth.similarity_threshold;
 
         if sim >= threshold {
+            self.track_depth_live |= depth_live;
             self.track_matches += 1;
             self.track_best = self.track_best.max(sim);
             self.stats.matching_frames += 1;
@@ -269,7 +312,8 @@ impl<'a> Verifier<'a> {
             LivenessMode::Blink => self.blink == Blink::Done,
             LivenessMode::IrOnly => self.infrared,
         };
-        if identity_ok && liveness_ok {
+        let depth_ok = self.cfg.camera.depth.mode != DepthMode::Required || self.track_depth_live;
+        if identity_ok && liveness_ok && depth_ok {
             Progress::Success {
                 similarity: self.track_best,
             }
@@ -322,8 +366,27 @@ impl<'a> Verifier<'a> {
     }
 
     /// Most specific reason why the attempt did not succeed.
+    fn note_relief(&mut self, h: f32, v: f32) {
+        let best = self
+            .stats
+            .depth_relief_mm
+            .unwrap_or((f32::NEG_INFINITY, f32::NEG_INFINITY));
+        if h.min(v) > best.0.min(best.1) {
+            self.stats.depth_relief_mm = Some((h, v));
+        }
+    }
+
     pub fn failure_reason(&self) -> FailReason {
         let s = &self.stats;
+        if s.depth_flat_frames > 0 && s.depth_flat_frames * 2 >= s.lit_face_frames.max(1) {
+            return FailReason::NotThreeDimensional;
+        }
+        if self.cfg.camera.depth.mode == DepthMode::Required
+            && s.matching_frames >= self.cfg.auth.min_matching_frames
+            && s.depth_live_frames == 0
+        {
+            return FailReason::NotThreeDimensional;
+        }
         if s.colour_frames > 0 && s.colour_frames * 2 >= s.frames {
             FailReason::NotInfrared
         } else if s.frames_with_face == 0 {
@@ -401,6 +464,7 @@ mod tests {
             chroma: 0.0,
             eyes_only: None,
             emitter_off: false,
+            depth: None,
             analysis: Some(Analysis {
                 face: face(x),
                 face_count: 1,
@@ -515,6 +579,7 @@ mod tests {
                 face_brightness: 120.0,
             }),
             emitter_off: false,
+            depth: None,
         };
         let seq = [
             obs(0.0, 0.1, OPEN, 100.0),
@@ -537,6 +602,7 @@ mod tests {
             analysis: None,
             eyes_only: None,
             emitter_off: true,
+            depth: None,
         }
     }
 
@@ -603,6 +669,73 @@ mod tests {
         // A steady camera never produces off frames.
         let mut g = StrobeFilter::default();
         assert!((0..20).all(|i| !g.is_off(100.0 + (i % 3) as f32)));
+    }
+
+    fn with_depth(mut o: Observation, v: DepthVerdict) -> Observation {
+        o.depth = Some(v);
+        o
+    }
+    const LIVE: DepthVerdict = DepthVerdict::Live {
+        horizontal_mm: 30.0,
+        vertical_mm: 25.0,
+    };
+    const FLAT: DepthVerdict = DepthVerdict::Flat {
+        horizontal_mm: 1.0,
+        vertical_mm: 0.5,
+    };
+
+    fn blink_seq(d: Option<DepthVerdict>) -> Vec<Observation> {
+        [(0.0, OPEN), (0.1, OPEN), (0.2, OPEN), (0.3, CLOSED), (0.4, OPEN)]
+            .iter()
+            .map(|&(t, e)| {
+                let o = obs(t, 0.1, e, 100.0);
+                match d {
+                    Some(v) => with_depth(o, v),
+                    None => o,
+                }
+            })
+            .collect()
+    }
+
+    #[test]
+    fn depth_off_or_absent_changes_nothing() {
+        let cfg = Config::default(); // mode = off
+        assert!(matches!(run(&cfg, &blink_seq(None)).0, Progress::Success { .. }));
+        let mut auto = Config::default();
+        auto.camera.depth.mode = DepthMode::Auto;
+        assert!(matches!(run(&auto, &blink_seq(None)).0, Progress::Success { .. }));
+        // Invalid depth data (projector covered) falls back to IR + blink.
+        assert!(matches!(
+            run(&auto, &blink_seq(Some(DepthVerdict::Invalid))).0,
+            Progress::Success { .. }
+        ));
+    }
+
+    #[test]
+    fn flat_face_is_rejected_in_auto_mode() {
+        let mut cfg = Config::default();
+        cfg.camera.depth.mode = DepthMode::Auto;
+        let (p, r) = run(&cfg, &blink_seq(Some(FLAT)));
+        assert!(!matches!(p, Progress::Success { .. }));
+        assert_eq!(r, FailReason::NotThreeDimensional);
+        assert!(matches!(
+            run(&cfg, &blink_seq(Some(LIVE))).0,
+            Progress::Success { .. }
+        ));
+    }
+
+    #[test]
+    fn required_mode_needs_live_depth() {
+        let mut cfg = Config::default();
+        cfg.camera.depth.mode = DepthMode::Required;
+        assert!(matches!(
+            run(&cfg, &blink_seq(Some(LIVE))).0,
+            Progress::Success { .. }
+        ));
+        let (p, r) = run(&cfg, &blink_seq(Some(DepthVerdict::Invalid)));
+        assert!(!matches!(p, Progress::Success { .. }));
+        assert_eq!(r, FailReason::NotThreeDimensional);
+        assert!(!matches!(run(&cfg, &blink_seq(None)).0, Progress::Success { .. }));
     }
 
     #[test]
