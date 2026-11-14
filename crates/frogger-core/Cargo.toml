@@ -17,6 +17,7 @@ log.workspace = true
 libc.workspace = true
 tract-onnx.workspace = true
 image.workspace = true
+chacha20poly1305 = "0.10"
 v4l = { version = "0.14", default-features = false, features = ["v4l2"] }
 
 [dev-dependencies]

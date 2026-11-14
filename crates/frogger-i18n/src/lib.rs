@@ -26,6 +26,8 @@ pub const LANGUAGES: &[(&str, &str, &str)] = &[
     ("ar", "العربية", include_str!("../../../i18n/ar.toml")),
     ("id", "Bahasa Indonesia", include_str!("../../../i18n/id.toml")),
     ("ms", "Bahasa Melayu", include_str!("../../../i18n/ms.toml")),
+    ("rw", "Ikinyarwanda", include_str!("../../../i18n/rw.toml")),
+    ("nyn", "Runyankore", include_str!("../../../i18n/nyn.toml")),
 ];
 
 type Catalog = HashMap<String, String>;
@@ -64,6 +66,7 @@ pub fn normalize(locale: &str) -> Option<&'static str> {
         "in" => "id".to_string(),
         "zsm" => "ms".to_string(),
         "swa" => "sw".to_string(),
+        "kin" => "rw".to_string(),
         _ => base,
     };
     LANGUAGES.iter().map(|(c, _, _)| *c).find(|c| *c == base)
@@ -169,6 +172,10 @@ mod tests {
         assert_eq!(normalize("zh_CN.UTF-8"), Some("zh"));
         assert_eq!(normalize("sw_KE"), Some("sw"));
         assert_eq!(normalize("ms_MY.UTF-8"), Some("ms"));
+        assert_eq!(normalize("rw_RW.UTF-8"), Some("rw"));
+        assert_eq!(normalize("kin"), Some("rw"));
+        // Runyankore has no glibc locale; LANGUAGE=nyn selects it.
+        assert_eq!(normalize("nyn"), Some("nyn"));
         assert_eq!(normalize("nl_NL.UTF-8"), None);
     }
 

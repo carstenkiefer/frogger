@@ -26,9 +26,13 @@ log you in**.
   (no C++ runtime), models from the OpenCV Zoo (YuNet: MIT, SFace: Apache-2.0)
   – commercially usable, unlike InsightFace or dlib's 68-point model
   ([THIRD_PARTY.md](THIRD_PARTY.md)).
-* **14 languages**: English, Deutsch, Français, Español, Português, 日本語,
+* **16 languages**: English, Deutsch, Français, Español, Português, 日本語,
   中文, 한국어, हिन्दी, Kiswahili, Русский, العربية, Bahasa Indonesia, Bahasa
-  Melayu – chosen from `LANGUAGE`/`LC_ALL`/`LC_MESSAGES`/`LANG` of the caller.
+  Melayu, Ikinyarwanda, Runyankore – chosen from
+  `LANGUAGE`/`LC_ALL`/`LC_MESSAGES`/`LANG` of the caller (Runyankore has no
+  glibc locale: use `LANGUAGE=nyn`).
+* **Face data sealed to the TPM** (systemd ≥ 254): templates are encrypted
+  with a key that only this device's TPM 2.0 chip can unlock.
 * **amd64 and arm64**, `.deb` and `.rpm`, built and install-tested in CI.
 
 ## Supported systems

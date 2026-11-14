@@ -440,6 +440,23 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
         Err(e) => println!("✘ {e:#}"),
     }
     println!("  {}", pam_status_text(lang));
+    let encrypted = call(socket, Op::Status, lang)
+        .ok()
+        .and_then(|(_, _, d)| d)
+        .and_then(|d| d["template_encryption"].as_bool())
+        .unwrap_or(false);
+    println!(
+        "  {}",
+        tr(
+            lang,
+            if encrypted {
+                "cli.doctor.encryption_on"
+            } else {
+                "cli.doctor.encryption_off"
+            },
+            &[]
+        )
+    );
     let desktop = std::env::var("XDG_CURRENT_DESKTOP")
         .unwrap_or_default()
         .to_lowercase();
@@ -507,6 +524,7 @@ fn setup(config: &Path, socket: &str, accept_rgb: bool, no_enroll: bool, lang: &
             }
         }
     })?;
+    ensure_template_key(lang);
     enable_socket();
     restart_daemon();
     // Enable PAM only once a face is enrolled successfully.
@@ -523,6 +541,76 @@ fn setup(config: &Path, socket: &str, accept_rgb: bool, no_enroll: bool, lang: &
         )
     );
     Ok(())
+}
+
+const CREDSTORE: &str = "/etc/credstore.encrypted";
+
+/// systemd major version (`systemctl --version`).
+fn systemd_version() -> Option<u32> {
+    let out = std::process::Command::new("systemctl")
+        .arg("--version")
+        .output()
+        .ok()?;
+    String::from_utf8_lossy(&out.stdout)
+        .split_whitespace()
+        .nth(1)?
+        .parse()
+        .ok()
+}
+
+/// Create the template encryption key and seal it to the TPM 2.0 chip as a
+/// systemd credential. Skipped without TPM 2.0 or with systemd < 254
+/// (`ImportCredential=` unavailable); templates then rely on file
+/// permissions. The key is bound to the TPM only, not to PCRs, so firmware
+/// or Secure Boot updates do not lock users out of face login.
+fn ensure_template_key(lang: &str) {
+    let path = Path::new(CREDSTORE).join(frogger_core::crypto::CREDENTIAL_NAME);
+    if path.exists() {
+        println!("{}", tr(lang, "cli.setup.tpm_on", &[]));
+        return;
+    }
+    let tpm = std::process::Command::new("systemd-creds")
+        .arg("has-tpm2")
+        .stdout(std::process::Stdio::null())
+        .status()
+        .map(|s| s.success())
+        .unwrap_or(false);
+    if !tpm || systemd_version().unwrap_or(0) < 254 {
+        println!("{}", tr(lang, "cli.setup.tpm_off", &[]));
+        return;
+    }
+    let result = (|| -> Result<()> {
+        use std::os::unix::fs::DirBuilderExt;
+        std::fs::DirBuilder::new()
+            .recursive(true)
+            .mode(0o700)
+            .create(CREDSTORE)?;
+        let key = frogger_core::crypto::TemplateKey::generate()?;
+        let mut child = std::process::Command::new("systemd-creds")
+            .args([
+                "encrypt",
+                "--name=frogger.key",
+                "--with-key=tpm2",
+                "--tpm2-pcrs=",
+                "-",
+            ])
+            .arg(&path)
+            .stdin(std::process::Stdio::piped())
+            .spawn()?;
+        child.stdin.take().context("stdin")?.write_all(key.bytes())?;
+        if !child.wait()?.success() {
+            let _ = std::fs::remove_file(&path);
+            bail!("systemd-creds encrypt failed");
+        }
+        Ok(())
+    })();
+    match result {
+        Ok(()) => println!("{}", tr(lang, "cli.setup.tpm_on", &[])),
+        Err(e) => {
+            eprintln!("frogger: {e:#}");
+            println!("{}", tr(lang, "cli.setup.tpm_off", &[]));
+        }
+    }
 }
 
 /// Enable and start the socket (no-op when already enabled). Needed on

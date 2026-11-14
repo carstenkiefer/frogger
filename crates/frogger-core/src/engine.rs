@@ -52,10 +52,25 @@ impl Engine {
         let mut pipeline = Pipeline::load(&cfg.models.detector, &cfg.models.recognizer)?;
         pipeline.detector.score_threshold = cfg.models.detection_threshold;
         let model_fp = store::model_fingerprint(&cfg.models.recognizer)?;
+        let key = crate::crypto::TemplateKey::from_credentials()?;
+        let store = Store::with_key(data_dir, key);
+        match store.migrate() {
+            Ok(0) => {}
+            Ok(n) => log::info!("encrypted {n} existing template(s) with the TPM-sealed key"),
+            Err(e) => log::warn!("template migration failed: {e:#}"),
+        }
+        log::info!(
+            "template encryption: {}",
+            if store.encrypted() {
+                "active (systemd credential)"
+            } else {
+                "not configured"
+            }
+        );
         Ok(Engine {
             cfg,
             pipeline,
-            store: Store::new(data_dir),
+            store,
             model_fp,
         })
     }

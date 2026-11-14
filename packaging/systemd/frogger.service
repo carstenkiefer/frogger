@@ -12,6 +12,10 @@ Group=frogger
 SupplementaryGroups=video
 StateDirectory=frogger
 StateDirectoryMode=0700
+# Template encryption key, sealed to the TPM by `frogger setup` into
+# /etc/credstore.encrypted/frogger.key. systemd (>= 254) decrypts it for the
+# daemon only; without it templates stay protected by file permissions.
+ImportCredential=frogger.key
 UMask=0077
 Restart=on-failure
 
