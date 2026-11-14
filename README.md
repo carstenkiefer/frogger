@@ -66,7 +66,8 @@ sudo frogger setup
 `setup` checks the cameras, explains whether the device is suitable, pins the
 camera, enables the PAM integration (`pam-auth-update` on Debian/Ubuntu) and
 enrolls the invoking user. Enrollment takes ~15 seconds: look at the camera,
-turn your head slightly, close your eyes when asked, then blink once to verify.
+turn your head slightly, close your eyes when asked, then **blink slowly** once to
+verify.
 
 Many IR cameras need their emitter switched on via a UVC extension unit. If
 the image is dark, configure it with
@@ -107,6 +108,21 @@ The installer finds the PAM module directory of the distribution, creates the
 `frogger` system user and enables the socket. Remove everything again with
 `sudo /usr/share/frogger/uninstall.sh`.
 
+## Tips for reliable recognition
+
+* **Blink slowly.** Liveness requires an open → closed → open eye movement.
+  Many laptop IR cameras deliver only 15 frames per second, and emitters that
+  strobe light only every second frame – a quick blink (100–150 ms) can fall
+  between two usable frames. A slow, deliberate blink (≈ ½ s) is always
+  seen. `frogger doctor` shows the measured frame rate of your camera.
+* **Distance and posture:** sit at your usual working distance (40–70 cm)
+  and look at the screen; enroll in the same position you usually work in.
+* **Glasses:** strong reflections of the IR emitter can hide the eyes. If
+  enrollment reports that open and closed eyes cannot be told apart, tilt
+  the glasses slightly or enroll without them.
+* **Diagnosis:** `frogger test` prints similarity and liveness statistics;
+  failed attempts are also logged (`journalctl -u frogger`).
+
 ## Usage
 
 | Command | Purpose |
@@ -124,7 +140,7 @@ The installer finds the PAM module directory of the distribution, creates the
 (`gdm-password`, `gdm-fingerprint`, `gdm-smartcard`) and has no slot for an
 additional face service. FROGGER therefore runs inside `gdm-password` (via
 `common-auth`): select your user / wake the lock screen, look at the camera,
-blink – done. If recognition fails, the password prompt appears. The first
+blink slowly – done. If recognition fails, the password prompt appears. The first
 login after boot always asks for the password so that the GNOME Keyring is
 unlocked (`require_password_for_first_login`).
 
@@ -137,7 +153,7 @@ recognition itself – it calls whatever PAM module is configured.
 the lock screen settings.
 
 **Terminal.** `sudo`, `sudo-rs`, `su` and `pkexec` show the prompts from the
-PAM conversation ("look at the camera and blink once"). Over SSH, face
+PAM conversation ("look at the camera and blink slowly once"). Over SSH, face
 authentication is skipped.
 
 ## Configuration
