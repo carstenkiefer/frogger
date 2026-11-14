@@ -35,10 +35,15 @@ log you in**.
 
 | | Status |
 |---|---|
-| Ubuntu 26.04 LTS (GNOME 50, sudo-rs) / Kubuntu 26.04 (Plasma 6.6) | primary target |
-| Debian 13 "trixie" (GNOME 48 / Plasma 6.3) | primary target |
-| Ubuntu 24.04, Fedora 41+, RHEL 10 and derivatives | packages provided, PAM set up manually on RPM systems |
-| Cameras | V4L2/UVC devices (GREY, Y16, YUYV, MJPG), IR emitters that are always on or strobe (every n-th frame lit), combined RGB+IR laptop cameras. MIPI/IPU6 cameras need a V4L2 bridge (libcamera/v4l2loopback). |
+| Ubuntu 26.04 LTS (GNOME 50, sudo-rs) / Kubuntu 26.04 (Plasma 6.6) | primary target, `.deb` |
+| Debian 13 "trixie" (GNOME 48 / Plasma 6.3) | primary target, `.deb` |
+| Fedora, RHEL / AlmaLinux / Rocky 10 | `.rpm`, PAM set up manually (authselect) |
+| Arch Linux and derivatives | `PKGBUILD` in `packaging/arch` |
+| Debian 12, Ubuntu 22.04/24.04, RHEL 9 and derivatives | best effort: packages install and run (tested in CI); [Howdy](https://github.com/boltgolt/howdy) is an established alternative there |
+| Other glibc distributions (Gentoo, Void, Slackware, …) | generic `.tar.gz` with `install.sh` / `uninstall.sh` |
+| musl-based (Alpine), NixOS | not supported yet |
+| CPU | amd64 (x86-64 baseline) and arm64; binaries need glibc ≥ 2.34 |
+| Cameras | V4L2/UVC devices (GREY, Y8I, Y10, Y12, Y16, YUYV, UYVY, NV12/NV21, YU12/YV12, MJPG), IR emitters that are always on or strobe, combined RGB+IR laptop cameras. MIPI/IPU6 cameras need a V4L2 bridge (libcamera/v4l2loopback). |
 
 ## Installation
 
@@ -77,6 +82,26 @@ sudo dnf install ./frogger-*.x86_64.rpm
 PAM is configured with `authselect` there; create a custom profile and add
 `auth [success=end default=ignore] pam_frogger.so` at the top of the `auth`
 section of `system-auth` (`frogger pam enable` prints the exact steps).
+
+### Arch Linux
+
+```bash
+cd packaging/arch && makepkg -si
+```
+
+### Other distributions (generic archive)
+
+```bash
+tar xzf frogger-*-amd64-linux.tar.gz
+```
+
+```bash
+sudo ./frogger-*-amd64-linux/install.sh
+```
+
+The installer finds the PAM module directory of the distribution, creates the
+`frogger` system user and enables the socket. Remove everything again with
+`sudo /usr/share/frogger/uninstall.sh`.
 
 ## Usage
 

@@ -1,0 +1,31 @@
+# systemctl is only called when systemd is running (not in chroots/pacstrap).
+_systemd_running() { [ -d /run/systemd/system ]; }
+
+post_install() {
+  # Arch convention: packages do not enable services; `frogger setup` does.
+  _systemd_running && systemctl daemon-reload
+  echo "FROGGER installed. Run 'sudo frogger setup' to check the camera, enable the service and enroll your face."
+  echo "Arch has no pam-auth-update: 'frogger pam enable' prints the line to add to /etc/pam.d/system-auth."
+}
+
+post_upgrade() {
+  _systemd_running && systemctl daemon-reload && systemctl try-restart frogger.service
+  return 0
+}
+
+pre_remove() {
+  _systemd_running && systemctl disable --now frogger.service frogger.socket
+  for f in /etc/pam.d/*; do
+    if grep -qs "pam_frogger.so" "$f"; then
+      echo "WARNING: $f still references pam_frogger.so – remove that line." >&2
+    fi
+  done
+  return 0
+}
+
+post_remove() {
+  # Biometric templates are personal data.
+  rm -rf /var/lib/frogger
+  _systemd_running && systemctl daemon-reload
+  return 0
+}

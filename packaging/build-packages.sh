@@ -31,6 +31,12 @@ for m in face_detection_yunet_2023mar.onnx face_recognition_sface_2021dec.onnx; 
   [ -f "$MODEL_DIR/$m" ] || { echo "missing model $MODEL_DIR/$m (run packaging/fetch-models.sh)" >&2; exit 1; }
 done
 
+# Minimum glibc actually required by the binaries (highest GLIBC_x symbol
+# version they reference) – never hand-maintained.
+GLIBC_MIN=$(readelf -V "$BIN/froggerd" "$BIN/frogger" "$BIN/libpam_frogger.so" \
+  | sed -n 's/.*Name: GLIBC_\([0-9.]*\).*/\1/p' | sort -V | tail -1)
+echo "binaries require glibc >= $GLIBC_MIN"
+
 mkdir -p "$OUT"
 OUT=$(cd "$OUT" && pwd)
 WORK=$(mktemp -d)
@@ -69,7 +75,7 @@ Version: $PKG_VERSION
 Architecture: $ARCH
 Maintainer: $MAINTAINER
 Installed-Size: $SIZE
-Depends: libc6 (>= 2.39), libgcc-s1, libpam0g, libpam-runtime, systemd
+Depends: libc6 (>= $GLIBC_MIN), libgcc-s1, libpam0g, libpam-runtime, systemd
 Suggests: linux-enable-ir-emitter
 Section: admin
 Priority: optional
@@ -87,10 +93,29 @@ RPMSTAGE=$WORK/rpmroot
 stage "$RPMSTAGE" "/usr/lib64/security" system-auth no
 RPMTOP=$WORK/rpmbuild
 mkdir -p "$RPMTOP"/{BUILD,RPMS,SOURCES,SPECS,SRPMS}
-sed -e "s/@VERSION@/$PKG_VERSION/" "$ROOT/packaging/rpm/frogger.spec.in" > "$RPMTOP/SPECS/frogger.spec"
+sed -e "s/@VERSION@/$PKG_VERSION/" -e "s/@GLIBC_MIN@/$GLIBC_MIN/" "$ROOT/packaging/rpm/frogger.spec.in" > "$RPMTOP/SPECS/frogger.spec"
 rpmbuild -bb --target "$RPM_ARCH" \
   --define "_topdir $RPMTOP" \
   --define "stage $RPMSTAGE" \
   "$RPMTOP/SPECS/frogger.spec" >/dev/null
 find "$RPMTOP/RPMS" -name '*.rpm' -exec cp {} "$OUT/" \;
+
+# ---- Generic archive (Arch, Gentoo, Void-glibc, ...) ----------------------
+TARNAME=frogger-${VERSION}-${ARCH}-linux
+T=$WORK/tar/$TARNAME
+install -Dm755 "$BIN/frogger" "$T/bin/frogger"
+install -Dm755 "$BIN/froggerd" "$T/libexec/froggerd"
+install -Dm644 "$BIN/libpam_frogger.so" "$T/lib/pam_frogger.so"
+install -Dm644 -t "$T/share/models" \
+  "$MODEL_DIR/face_detection_yunet_2023mar.onnx" "$MODEL_DIR/face_recognition_sface_2021dec.onnx"
+install -Dm644 "$ROOT/packaging/config.toml" "$T/share/config.toml.example"
+install -Dm644 "$ROOT/packaging/pam.d/kde-face" "$T/share/pam.d/kde-face"
+install -Dm644 -t "$T/systemd" "$ROOT/packaging/systemd/frogger.socket" "$ROOT/packaging/systemd/frogger.service" \
+  "$ROOT/packaging/sysusers.d/frogger.conf"
+install -Dm644 -t "$T/doc" "$ROOT/README.md" "$ROOT/SECURITY.md" "$ROOT/LICENSE-MIT" "$ROOT/LICENSE-APACHE" \
+  "$ROOT/THIRD_PARTY.md"
+install -m755 "$ROOT/packaging/tarball/install.sh" "$ROOT/packaging/tarball/uninstall.sh" "$T/"
+echo "$ARCH" > "$T/ARCH"
+echo "$GLIBC_MIN" > "$T/GLIBC_MIN"
+tar -C "$WORK/tar" --owner=0 --group=0 -czf "$OUT/$TARNAME.tar.gz" "$TARNAME"
 ls -l "$OUT"
