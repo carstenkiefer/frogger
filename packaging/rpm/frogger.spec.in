@@ -1,0 +1,60 @@
+# Binary-only spec: payload is staged by packaging/build-packages.sh.
+%global debug_package %{nil}
+%global __strip /bin/true
+%global __os_install_post %{nil}
+
+Name:           frogger
+Version:        @VERSION@
+Release:        1%{?dist}
+Summary:        Face authentication with IR cameras (Windows-Hello-like)
+License:        MIT OR Apache-2.0
+URL:            https://github.com/carstenkiefer/frogger
+AutoReqProv:    no
+Requires:       pam
+Requires:       systemd
+Requires:       glibc >= 2.39
+
+%description
+FROGGER lets users log in, unlock the screen and authorise sudo/polkit with
+their face. It requires an infrared camera and a blink-based liveness check so
+that photos and screens cannot be used to log in. Devices without an IR camera
+are refused by default policy.
+
+%install
+cp -a %{stage}/. %{buildroot}/
+
+%post
+systemd-sysusers /usr/lib/sysusers.d/frogger.conf >/dev/null 2>&1 || :
+if [ -d /run/systemd/system ]; then
+  systemctl daemon-reload >/dev/null 2>&1 || :
+  if [ $1 -eq 1 ]; then
+    systemctl enable --now frogger.socket >/dev/null 2>&1 || :
+    echo "FROGGER installed. Run 'sudo frogger setup' to check the camera and enroll your face."
+  else
+    systemctl try-restart frogger.service >/dev/null 2>&1 || :
+  fi
+fi
+
+%preun
+if [ $1 -eq 0 ] && [ -d /run/systemd/system ]; then
+  systemctl disable --now frogger.service frogger.socket >/dev/null 2>&1 || :
+fi
+if [ $1 -eq 0 ] && [ -f /etc/pam.d/kde-face ] && grep -qs FROGGER /etc/pam.d/kde-face; then
+  rm -f /etc/pam.d/kde-face
+fi
+
+%postun
+if [ $1 -eq 0 ]; then
+  # Biometric templates are personal data: remove them with the package.
+  rm -rf /var/lib/frogger
+fi
+
+%files
+/usr/libexec/froggerd
+/usr/bin/frogger
+/usr/lib64/security/pam_frogger.so
+/usr/share/frogger
+/usr/lib/systemd/system/frogger.socket
+/usr/lib/systemd/system/frogger.service
+/usr/lib/sysusers.d/frogger.conf
+%doc /usr/share/doc/frogger

@@ -1,0 +1,20 @@
+[package]
+name = "frogger-cli"
+description = "FROGGER command line tool: setup, enrollment and diagnostics"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "frogger"
+path = "src/main.rs"
+
+[dependencies]
+frogger-proto.workspace = true
+frogger-core.workspace = true
+frogger-i18n.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+clap.workspace = true
+libc.workspace = true
+toml_edit = { version = "0.22", features = ["serde"] }

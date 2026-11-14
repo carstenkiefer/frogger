@@ -1,0 +1,16 @@
+[package]
+name = "froggerd"
+description = "FROGGER face authentication daemon"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+frogger-proto.workspace = true
+frogger-core.workspace = true
+frogger-i18n.workspace = true
+anyhow.workspace = true
+serde_json.workspace = true
+log.workspace = true
+env_logger.workspace = true
+libc.workspace = true

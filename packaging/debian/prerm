@@ -1,0 +1,15 @@
+#!/bin/sh
+set -e
+if [ "$1" = "remove" ]; then
+    if command -v pam-auth-update >/dev/null 2>&1; then
+        pam-auth-update --package --remove frogger || true
+    fi
+    if [ -f /etc/pam.d/kde-face ] && grep -qs "FROGGER" /etc/pam.d/kde-face; then
+        rm -f /etc/pam.d/kde-face
+    fi
+    if [ -d /run/systemd/system ]; then
+        systemctl stop frogger.service frogger.socket || true
+        systemctl disable frogger.socket >/dev/null 2>&1 || true
+    fi
+fi
+exit 0

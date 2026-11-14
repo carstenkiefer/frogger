@@ -1,0 +1,55 @@
+# FROGGER configuration – /etc/frogger/config.toml
+# All values below are the built-in defaults. Unknown keys are rejected.
+# After changes: sudo systemctl restart frogger.service
+
+[camera]
+# "auto" picks the best infrared camera. `frogger setup` writes a stable
+# /dev/v4l/by-id/... path here.
+device = "auto"
+width = 640
+height = 480
+warmup_frames = 4
+# Camera pinning: the USB "vendor:product" the device must report.
+# expected_usb_id = "04f2:b6dd"
+# IR emitter switch (UVC extension unit). Import from linux-enable-ir-emitter
+# with: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml
+# emitter = { unit = 14, selector = 6, control = [1, 3, 3, 0, 0, 0, 0, 0, 0] }
+
+[auth]
+timeout_secs = 5.0
+# Cosine similarity needed for a match (SFace). Higher = stricter.
+similarity_threshold = 0.50
+min_matching_frames = 3
+# PAM services that may use face authentication (empty list = all).
+services = ["sudo", "sudo-i", "su", "polkit-1", "login", "gdm-password", "sddm", "lightdm",
+            "plasmalogin", "kde", "kde-fingerprint", "kde-face", "frogger-test"]
+# Display-manager services: the first login after boot requires the password
+# so that GNOME Keyring / KWallet can be unlocked.
+login_services = ["gdm-password", "sddm", "lightdm", "plasmalogin", "login"]
+require_password_for_first_login = true
+max_failures = 5
+lockout_secs = 300
+skip_when_lid_closed = true
+# Refuse face auth while the requesting user is also logged in via SSH.
+deny_while_remote_session = true
+
+[liveness]
+# "blink": IR + blink challenge (recommended, defeats photos and screens)
+# "ir-only": IR only – printed IR photos are not reliably rejected!
+mode = "blink"
+max_closed_secs = 1.5
+min_ir_face_brightness = 25.0
+min_track_iou = 0.45
+reject_multiple_faces = true
+
+[policy]
+# Allow face login on devices WITHOUT an infrared camera. Insecure: a photo
+# or video can unlock the device. Never enable on devices with sensitive data.
+allow_insecure_rgb = false
+# Devices with sensitive data: forces IR + blink and forbids RGB entirely.
+sensitive_device = false
+
+[models]
+detector = "/usr/share/frogger/models/face_detection_yunet_2023mar.onnx"
+recognizer = "/usr/share/frogger/models/face_recognition_sface_2021dec.onnx"
+detection_threshold = 0.8

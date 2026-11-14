@@ -1,0 +1,16 @@
+[package]
+name = "pam-frogger"
+description = "PAM module for FROGGER face authentication (thin client of froggerd)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[lib]
+name = "pam_frogger"
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+frogger-proto.workspace = true
+frogger-i18n.workspace = true
+serde_json.workspace = true
+libc.workspace = true

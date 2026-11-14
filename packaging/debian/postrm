@@ -1,0 +1,10 @@
+#!/bin/sh
+set -e
+if [ "$1" = "purge" ]; then
+    # Biometric templates are personal data: delete them on purge.
+    rm -rf /var/lib/frogger
+fi
+if [ -d /run/systemd/system ]; then
+    systemctl daemon-reload || true
+fi
+exit 0

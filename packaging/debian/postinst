@@ -1,0 +1,19 @@
+#!/bin/sh
+set -e
+if [ "$1" = "configure" ]; then
+    if command -v systemd-sysusers >/dev/null 2>&1; then
+        systemd-sysusers /usr/lib/sysusers.d/frogger.conf
+    fi
+    if [ -d /run/systemd/system ]; then
+        systemctl daemon-reload || true
+        systemctl enable frogger.socket >/dev/null 2>&1 || true
+        systemctl start frogger.socket || true
+        systemctl try-restart frogger.service || true
+    fi
+    # PAM integration is NOT enabled automatically: `frogger setup` first
+    # checks for an infrared camera and enforces the device policy.
+    if ! grep -qs pam_frogger.so /etc/pam.d/common-auth; then
+        echo "FROGGER installed. Run 'sudo frogger setup' to check the camera and enroll your face."
+    fi
+fi
+exit 0

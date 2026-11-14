@@ -1,0 +1,48 @@
+[Unit]
+Description=FROGGER face authentication daemon
+Documentation=https://github.com/carstenkiefer/frogger
+Requires=frogger.socket
+After=frogger.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/libexec/froggerd
+User=frogger
+Group=frogger
+SupplementaryGroups=video
+StateDirectory=frogger
+StateDirectoryMode=0700
+UMask=0077
+Restart=on-failure
+
+# Sandboxing: the daemon needs the camera, its state directory, read access
+# to /proc and /run/systemd (session locality) and NSS lookups – nothing else.
+NoNewPrivileges=yes
+CapabilityBoundingSet=
+AmbientCapabilities=
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateNetwork=yes
+IPAddressDeny=any
+RestrictAddressFamilies=AF_UNIX
+DevicePolicy=closed
+DeviceAllow=char-video4linux rw
+ProtectKernelTunables=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectControlGroups=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictNamespaces=yes
+RestrictRealtime=yes
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryDenyWriteExecute=yes
+RemoveIPC=yes
+SystemCallArchitectures=native
+SystemCallFilter=@system-service
+SystemCallFilter=~@privileged @mount @swap @reboot @module @raw-io @debug @cpu-emulation @obsolete
+
+[Install]
+Also=frogger.socket

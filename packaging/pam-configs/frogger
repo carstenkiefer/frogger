@@ -1,0 +1,8 @@
+Name: FROGGER face authentication (IR camera)
+Default: no
+Priority: 300
+Auth-Type: Primary
+Auth:
+	[success=end default=ignore]	pam_frogger.so
+Auth-Initial:
+	[success=end default=ignore]	pam_frogger.so

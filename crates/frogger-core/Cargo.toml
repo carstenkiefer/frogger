@@ -1,0 +1,22 @@
+[package]
+name = "frogger-core"
+description = "Camera capture, face detection/recognition and liveness checks for frogger"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+frogger-proto.workspace = true
+frogger-i18n.workspace = true
+anyhow.workspace = true
+thiserror.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+toml.workspace = true
+log.workspace = true
+libc.workspace = true
+tract-onnx.workspace = true
+image.workspace = true
+v4l = { version = "0.14", default-features = false, features = ["v4l2"] }
+
+[dev-dependencies]

@@ -1,0 +1,13 @@
+[Unit]
+Description=FROGGER face authentication socket
+Documentation=man:frogger(1) https://github.com/carstenkiefer/frogger
+
+[Socket]
+ListenStream=/run/frogger/frogger.sock
+# Every local process may connect; the daemon authorises callers with
+# SO_PEERCRED (root: any user, others: only themselves).
+SocketMode=0666
+DirectoryMode=0755
+
+[Install]
+WantedBy=sockets.target

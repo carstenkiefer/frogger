@@ -1,0 +1,6 @@
+#%PAM-1.0
+# FROGGER: face authenticator of the KDE Plasma (>= 6.8) lock screen.
+# Enable it in the lock screen settings (kscreenlockerrc: [Authenticators] Face=true).
+# Only face authentication runs here; the password stays in the "kde" service.
+auth      [success=done default=die]  pam_frogger.so
+account   include                     @ACCOUNT@

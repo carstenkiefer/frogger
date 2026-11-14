@@ -1,0 +1,9 @@
+[package]
+name = "frogger-i18n"
+description = "Message catalogs of FROGGER"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[dependencies]
+toml.workspace = true

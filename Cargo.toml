@@ -1,0 +1,38 @@
+[workspace]
+resolver = "2"
+members = [
+    "crates/frogger-i18n",
+    "crates/frogger-proto",
+    "crates/frogger-core",
+    "crates/frogger-cli",
+    "crates/froggerd",
+    "crates/pam-frogger",
+]
+
+[workspace.package]
+version = "0.1.0"
+edition = "2021"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/carstenkiefer/frogger"
+authors = ["FROGGER contributors"]
+
+[workspace.dependencies]
+frogger-proto = { path = "crates/frogger-proto" }
+frogger-i18n = { path = "crates/frogger-i18n" }
+frogger-core = { path = "crates/frogger-core" }
+anyhow = "1"
+thiserror = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+toml = "0.8"
+log = "0.4"
+env_logger = { version = "0.11", default-features = false, features = ["auto-color", "humantime"] }
+libc = "0.2"
+clap = { version = "4", features = ["derive"] }
+tract-onnx = "0.23"
+image = { version = "0.25", default-features = false, features = ["jpeg", "png"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+strip = "debuginfo"
