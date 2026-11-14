@@ -5,6 +5,7 @@ members = [
     "crates/frogger-proto",
     "crates/frogger-core",
     "crates/frogger-cli",
+    "crates/frogger-askpass",
     "crates/froggerd",
     "crates/pam-frogger",
 ]

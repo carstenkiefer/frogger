@@ -103,7 +103,8 @@ jobs:
         run: cargo build --release --locked --workspace
       - name: Guard glibc baseline
         run: |
-          need=$(readelf -V target/release/froggerd target/release/frogger target/release/libpam_frogger.so \
+          need=$(readelf -V target/release/froggerd target/release/frogger target/release/frogger-askpass \
+            target/release/libpam_frogger.so \
             | sed -n 's/.*Name: GLIBC_\([0-9.]*\).*/\1/p' | sort -V | tail -1)
           echo "binaries require glibc >= $need"
           [ "$(printf '%s\n2.34\n' "$need" | sort -V | tail -1)" = "2.34" ] \

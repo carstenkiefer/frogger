@@ -22,7 +22,7 @@ similarity_threshold = 0.50
 min_matching_frames = 3
 # PAM services that may use face authentication (empty list = all).
 services = ["sudo", "sudo-i", "su", "polkit-1", "login", "gdm-password", "sddm", "lightdm",
-            "plasmalogin", "kde", "kde-fingerprint", "kde-face", "frogger-test"]
+            "plasmalogin", "kde", "kde-fingerprint", "kde-face", "frogger-test", "frogger-ssh"]
 # Display-manager services: the first login after boot requires the password
 # so that GNOME Keyring / KWallet can be unlocked.
 login_services = ["gdm-password", "sddm", "lightdm", "plasmalogin", "login"]

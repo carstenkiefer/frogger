@@ -35,6 +35,9 @@ log you in**.
   depth camera (`Z16`), `camera.depth.mode = "auto"` additionally rejects
   flat faces; `"required"` demands depth confirmation. Off by default until
   validated on real hardware.
+* **SSH, securely:** confirm every use of your SSH keys with your face on
+  the laptop (`frogger ssh enable`, `ssh-add -c`), including `sudo` on
+  servers via `pam_ssh_agent_auth` – see [docs/SSH.md](docs/SSH.md).
 * **Face data sealed to the TPM** (systemd ≥ 254): templates are encrypted
   with a key that only this device's TPM 2.0 chip can unlock.
 * **amd64 and arm64**, `.deb` and `.rpm`, built and install-tested in CI.

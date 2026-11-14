@@ -27,6 +27,8 @@ phrases below are the least certain ones.
 - Confirmation word `cli.setup.yes_word` = "EGO" – is this the natural "yes"?
 - Depth check (`auth.not_3d`, `cli.doctor.depth_found`): "obuzima" for depth,
   "nibusherekyere" for flat – both uncertain.
+- SSH messages (`ssh.*`, `cli.ssh.*`): "ekisumuruzo" for key, "okuhamya" for
+  confirmation, "ruga omu sisitemu ogarukemu" for log out and in again.
 
 ### Kinyarwanda
 - French loanwords "infrarouge", "ecran", "chiffrement" (alternatives:
@@ -40,3 +42,5 @@ phrases below are the least certain ones.
 - Confirmation word "YEGO".
 - Depth check (`auth.not_3d`, `cli.doctor.depth_found`): "ubujyakuzimu" for
   depth, "irambuye" for flat.
+- SSH messages (`ssh.*`, `cli.ssh.*`): "urufunguzo / imfunguzo" for key(s),
+  "kwemeza" for confirmation.

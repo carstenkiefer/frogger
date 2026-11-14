@@ -1,0 +1,16 @@
+[package]
+name = "frogger-askpass"
+description = "SSH_ASKPASS helper: confirm ssh-agent key use with FROGGER face authentication"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+
+[[bin]]
+name = "frogger-askpass"
+path = "src/main.rs"
+
+[dependencies]
+frogger-proto.workspace = true
+frogger-i18n.workspace = true
+serde_json.workspace = true
+libc.workspace = true
