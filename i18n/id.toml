@@ -1,8 +1,8 @@
 # Katalog pesan FROGGER – Bahasa Indonesia.
 
-"auth.start" = "Pengenalan wajah: lihat ke kamera dan berkedip sekali."
+"auth.start" = "Pengenalan wajah: lihat ke kamera dan berkedip pelan sekali."
 "auth.start_ir_only" = "Pengenalan wajah: lihat ke kamera."
-"auth.blink" = "Silakan berkedip."
+"auth.blink" = "Silakan berkedip pelan."
 "auth.success" = "Wajah dikenali."
 "auth.no_face" = "Tidak ada wajah yang terdeteksi."
 "auth.not_recognized" = "Wajah tidak dikenali."
@@ -19,7 +19,7 @@
 "enroll.turn" = "Sekarang putar kepala Anda perlahan sedikit ke kiri dan ke kanan."
 "enroll.close_eyes" = "Sekarang tutup mata Anda selama sekitar dua detik."
 "enroll.open_eyes" = "Buka kembali mata Anda."
-"enroll.verify" = "Verifikasi: lihat ke kamera dan berkedip sekali."
+"enroll.verify" = "Verifikasi: lihat ke kamera dan berkedip pelan sekali."
 "enroll.verify_failed" = "Verifikasi gagal, tidak ada yang disimpan."
 "enroll.done" = "Pendaftaran selesai ({count} sampel disimpan)."
 "enroll.no_face" = "Tidak ditemukan wajah yang dapat digunakan. Periksa pencahayaan dan jarak ke kamera."
@@ -47,6 +47,7 @@
 "cli.doctor.policy" = "Kebijakan: RGB tidak aman diizinkan: {rgb}, perangkat sensitif: {sensitive}"
 "cli.doctor.models_missing" = "Berkas model tidak ada: {path}"
 "cli.doctor.emitter_dark" = "Gambar inframerah hampir hitam: pemancar IR kemungkinan mati. Atur dengan linux-enable-ir-emitter lalu impor hasilnya: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy juga aktif dalam konfigurasi PAM ({files}). Dua modul wajah berebut kamera IR dan berjalan bergantian – hapus Howdy (mis. sudo apt remove howdy) atau nonaktifkan FROGGER."
 "cli.doctor.depth_found" = "Sensor kedalaman ditemukan: {name} ({device}) – pemeriksaan kedalaman eksperimental: {mode}"
 "cli.doctor.lid_closed" = "Penutup laptop tertutup – kamera tidak dapat melihat Anda."
 "cli.doctor.daemon_ok" = "Daemon sedang berjalan (versi {version})."

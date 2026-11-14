@@ -1,8 +1,8 @@
 # Orodha ya ujumbe ya FROGGER – Kiswahili.
 
-"auth.start" = "Utambuzi wa uso: tazama kamera na upepese macho mara moja."
+"auth.start" = "Utambuzi wa uso: tazama kamera na upepese macho polepole mara moja."
 "auth.start_ir_only" = "Utambuzi wa uso: tazama kamera."
-"auth.blink" = "Tafadhali pepesa macho."
+"auth.blink" = "Tafadhali pepesa macho polepole."
 "auth.success" = "Uso umetambuliwa."
 "auth.no_face" = "Hakuna uso uliogunduliwa."
 "auth.not_recognized" = "Uso haukutambuliwa."
@@ -19,7 +19,7 @@
 "enroll.turn" = "Sasa geuza kichwa chako polepole kidogo kushoto na kulia."
 "enroll.close_eyes" = "Sasa funga macho yako kwa takriban sekunde mbili."
 "enroll.open_eyes" = "Fungua macho yako tena."
-"enroll.verify" = "Uthibitishaji: tazama kamera na upepese macho mara moja."
+"enroll.verify" = "Uthibitishaji: tazama kamera na upepese macho polepole mara moja."
 "enroll.verify_failed" = "Uthibitishaji umeshindwa, hakuna kilichohifadhiwa."
 "enroll.done" = "Usajili umekamilika (sampuli {count} zimehifadhiwa)."
 "enroll.no_face" = "Hakuna uso unaofaa uliopatikana. Angalia mwanga na umbali kutoka kwa kamera."
@@ -47,6 +47,7 @@
 "cli.doctor.policy" = "Sera: RGB isiyo salama inaruhusiwa: {rgb}, kifaa nyeti: {sensitive}"
 "cli.doctor.models_missing" = "Faili ya modeli haipo: {path}"
 "cli.doctor.emitter_dark" = "Picha ya infraredi ni karibu nyeusi: huenda kitoa-mwanga cha IR kimezimwa. Kisanidi kwa linux-enable-ir-emitter kisha uingize matokeo: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy pia imewashwa katika usanidi wa PAM ({files}). Moduli mbili za uso zinashindania kamera ya IR na kuendeshwa moja baada ya nyingine – ondoa Howdy (k.m. sudo apt remove howdy) au zima FROGGER."
 "cli.doctor.depth_found" = "Kihisi cha kina kimepatikana: {name} ({device}) – ukaguzi wa kina wa majaribio: {mode}"
 "cli.doctor.lid_closed" = "Mfuniko wa kompyuta mpakato umefungwa – kamera haiwezi kukuona."
 "cli.doctor.daemon_ok" = "Daemon inaendeshwa (toleo {version})."

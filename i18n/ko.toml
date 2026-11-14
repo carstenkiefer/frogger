@@ -1,8 +1,8 @@
 # FROGGER 메시지 카탈로그 – 한국어.
 
-"auth.start" = "얼굴 인식: 카메라를 보고 눈을 한 번 깜빡이세요."
+"auth.start" = "얼굴 인식: 카메라를 보고 천천히 한 번 눈을 깜박이세요."
 "auth.start_ir_only" = "얼굴 인식: 카메라를 보세요."
-"auth.blink" = "눈을 깜빡이세요."
+"auth.blink" = "천천히 눈을 깜박이세요."
 "auth.success" = "얼굴이 인식되었습니다."
 "auth.no_face" = "얼굴이 감지되지 않았습니다."
 "auth.not_recognized" = "얼굴을 인식하지 못했습니다."
@@ -19,7 +19,7 @@
 "enroll.turn" = "이제 머리를 천천히 왼쪽과 오른쪽으로 조금씩 돌리세요."
 "enroll.close_eyes" = "이제 약 2초 동안 눈을 감으세요."
 "enroll.open_eyes" = "다시 눈을 뜨세요."
-"enroll.verify" = "확인: 카메라를 보고 눈을 한 번 깜빡이세요."
+"enroll.verify" = "확인: 카메라를 보고 천천히 한 번 눈을 깜박이세요."
 "enroll.verify_failed" = "확인에 실패했습니다. 아무것도 저장되지 않았습니다."
 "enroll.done" = "등록이 완료되었습니다 (샘플 {count}개 저장됨)."
 "enroll.no_face" = "사용할 수 있는 얼굴을 찾지 못했습니다. 조명과 카메라와의 거리를 확인하세요."
@@ -47,6 +47,7 @@
 "cli.doctor.policy" = "정책: 안전하지 않은 RGB 허용: {rgb}, 민감한 기기: {sensitive}"
 "cli.doctor.models_missing" = "모델 파일이 없습니다: {path}"
 "cli.doctor.emitter_dark" = "적외선 이미지가 거의 검은색입니다. IR 발광기가 꺼져 있는 것 같습니다. linux-enable-ir-emitter로 설정한 뒤 결과를 가져오세요: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy도 PAM 구성에서 활성화되어 있습니다({files}). 두 얼굴 인식 모듈이 IR 카메라를 두고 경쟁하며 차례로 실행됩니다. Howdy를 제거하거나(예: sudo apt remove howdy) FROGGER를 비활성화하세요."
 "cli.doctor.depth_found" = "깊이 센서를 찾았습니다: {name} ({device}) – 실험적 깊이 검사: {mode}"
 "cli.doctor.lid_closed" = "노트북 덮개가 닫혀 있습니다 – 카메라가 사용자를 볼 수 없습니다."
 "cli.doctor.daemon_ok" = "데몬이 실행 중입니다 (버전 {version})."

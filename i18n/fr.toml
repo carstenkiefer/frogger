@@ -1,8 +1,8 @@
 # Catalogue de messages FROGGER – Français.
 
-"auth.start" = "Reconnaissance faciale : regardez la caméra et clignez des yeux une fois."
+"auth.start" = "Reconnaissance faciale : regardez la caméra et clignez lentement des yeux une fois."
 "auth.start_ir_only" = "Reconnaissance faciale : regardez la caméra."
-"auth.blink" = "Veuillez cligner des yeux."
+"auth.blink" = "Veuillez cligner lentement des yeux."
 "auth.success" = "Visage reconnu."
 "auth.no_face" = "Aucun visage détecté."
 "auth.not_recognized" = "Visage non reconnu."
@@ -19,7 +19,7 @@
 "enroll.turn" = "Tournez maintenant lentement la tête un peu vers la gauche et vers la droite."
 "enroll.close_eyes" = "Fermez maintenant les yeux pendant environ deux secondes."
 "enroll.open_eyes" = "Rouvrez les yeux."
-"enroll.verify" = "Vérification : regardez la caméra et clignez des yeux une fois."
+"enroll.verify" = "Vérification : regardez la caméra et clignez lentement des yeux une fois."
 "enroll.verify_failed" = "Échec de la vérification, rien n'a été enregistré."
 "enroll.done" = "Enregistrement terminé ({count} échantillons stockés)."
 "enroll.no_face" = "Aucun visage exploitable trouvé. Vérifiez l'éclairage et la distance à la caméra."
@@ -47,6 +47,7 @@
 "cli.doctor.policy" = "Politique : RGB non sécurisé autorisé : {rgb}, appareil sensible : {sensitive}"
 "cli.doctor.models_missing" = "Fichier de modèle manquant : {path}"
 "cli.doctor.emitter_dark" = "L'image infrarouge est presque noire : l'émetteur IR est probablement éteint. Configurez-le avec linux-enable-ir-emitter puis importez le résultat : sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy est également actif dans la configuration PAM ({files}). Deux modules faciaux se disputent la caméra IR et s'exécutent l'un après l'autre – supprimez Howdy (p. ex. sudo apt remove howdy) ou désactivez FROGGER."
 "cli.doctor.depth_found" = "Capteur de profondeur trouvé : {name} ({device}) – contrôle de profondeur expérimental : {mode}"
 "cli.doctor.lid_closed" = "L'écran de l'ordinateur portable est rabattu – la caméra ne peut pas vous voir."
 "cli.doctor.daemon_ok" = "Le démon est en cours d'exécution (version {version})."

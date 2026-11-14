@@ -1,8 +1,8 @@
 # Katalog mesej FROGGER – Bahasa Melayu.
 
-"auth.start" = "Pengecaman wajah: pandang ke kamera dan kelipkan mata sekali."
+"auth.start" = "Pengecaman wajah: lihat ke kamera dan kelipkan mata perlahan-lahan sekali."
 "auth.start_ir_only" = "Pengecaman wajah: pandang ke kamera."
-"auth.blink" = "Sila kelipkan mata."
+"auth.blink" = "Sila kelipkan mata perlahan-lahan."
 "auth.success" = "Wajah dikenal pasti."
 "auth.no_face" = "Tiada wajah dikesan."
 "auth.not_recognized" = "Wajah tidak dikenal pasti."
@@ -19,7 +19,7 @@
 "enroll.turn" = "Sekarang pusingkan kepala anda perlahan-lahan sedikit ke kiri dan ke kanan."
 "enroll.close_eyes" = "Sekarang pejamkan mata anda selama kira-kira dua saat."
 "enroll.open_eyes" = "Buka semula mata anda."
-"enroll.verify" = "Pengesahan: pandang ke kamera dan kelipkan mata sekali."
+"enroll.verify" = "Pengesahan: lihat ke kamera dan kelipkan mata perlahan-lahan sekali."
 "enroll.verify_failed" = "Pengesahan gagal, tiada apa-apa yang disimpan."
 "enroll.done" = "Pendaftaran selesai ({count} sampel disimpan)."
 "enroll.no_face" = "Tiada wajah yang boleh digunakan ditemui. Semak pencahayaan dan jarak ke kamera."
@@ -47,6 +47,7 @@
 "cli.doctor.policy" = "Dasar: RGB tidak selamat dibenarkan: {rgb}, peranti sensitif: {sensitive}"
 "cli.doctor.models_missing" = "Fail model tiada: {path}"
 "cli.doctor.emitter_dark" = "Imej inframerah hampir hitam: pemancar IR berkemungkinan dimatikan. Konfigurasikannya dengan linux-enable-ir-emitter dan import hasilnya: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy juga aktif dalam konfigurasi PAM ({files}). Dua modul wajah berebut kamera IR dan berjalan satu demi satu – buang Howdy (cth. sudo apt remove howdy) atau lumpuhkan FROGGER."
 "cli.doctor.depth_found" = "Penderia kedalaman ditemui: {name} ({device}) – semakan kedalaman eksperimen: {mode}"
 "cli.doctor.lid_closed" = "Penutup komputer riba tertutup – kamera tidak dapat melihat anda."
 "cli.doctor.daemon_ok" = "Daemon sedang berjalan (versi {version})."

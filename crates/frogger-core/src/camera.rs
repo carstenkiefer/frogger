@@ -574,16 +574,32 @@ pub struct CaptureStats {
     /// Mean absolute brightness difference between consecutive frames
     /// relative to the mean; high values indicate an alternating emitter.
     pub alternation: f32,
+    /// Measured frame rate and the rate of frames lit by the emitter (the
+    /// latter is what liveness can use; a blink lasts 100–400 ms).
+    pub fps: f32,
+    pub lit_fps: f32,
 }
 
 pub fn capture_stats(cam: &mut Camera, frames: usize) -> Result<CaptureStats> {
     let mut means = Vec::new();
     let mut chroma = 0.0;
-    for _ in 0..frames {
+    // The first frames may come straight from the driver's queue; time only
+    // the rest.
+    const SKIP: usize = 3;
+    let mut timed_from = None;
+    for i in 0..frames.max(SKIP + 2) {
         let f = cam.frame()?;
+        if i == SKIP {
+            timed_from = Some(std::time::Instant::now());
+        }
         chroma += f.chroma;
         means.push(f.mean);
     }
+    let fps = timed_from
+        .map(|t| (means.len() - SKIP - 1) as f32 / t.elapsed().as_secs_f32().max(1e-3))
+        .unwrap_or(0.0);
+    let mut strobe = crate::auth::StrobeFilter::default();
+    let lit = means.iter().filter(|&&m| !strobe.is_off(m)).count();
     let n = means.len().max(1) as f32;
     let mean = means.iter().sum::<f32>() / n;
     let alt = means.windows(2).map(|w| (w[0] - w[1]).abs()).sum::<f32>() / (n - 1.0).max(1.0);
@@ -592,6 +608,8 @@ pub fn capture_stats(cam: &mut Camera, frames: usize) -> Result<CaptureStats> {
         mean_chroma: chroma / n,
         mean_brightness: mean,
         alternation: if mean > 1.0 { alt / mean } else { 0.0 },
+        fps,
+        lit_fps: fps * lit as f32 / means.len().max(1) as f32,
     })
 }
 

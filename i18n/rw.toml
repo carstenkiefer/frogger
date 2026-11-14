@@ -1,9 +1,9 @@
 # FROGGER message catalog – Kinyarwanda (Ikinyarwanda).
 # Machine translation – please have a native speaker review.
 
-"auth.start" = "Kumenya isura: reba muri kamera maze uhumbye rimwe."
+"auth.start" = "Kumenya isura: reba muri kamera maze uhumbye buhoro rimwe."
 "auth.start_ir_only" = "Kumenya isura: reba muri kamera."
-"auth.blink" = "Nyamuneka humbya."
+"auth.blink" = "Nyamuneka humbya buhoro."
 "auth.success" = "Isura yamenyekanye."
 "auth.no_face" = "Nta sura yabonetse."
 "auth.not_recognized" = "Isura ntiyamenyekanye."
@@ -20,7 +20,7 @@
 "enroll.turn" = "Noneho hindukiza umutwe buhoro buhoro gato ibumoso n'iburyo."
 "enroll.close_eyes" = "Noneho humiriza amaso nk'amasegonda abiri."
 "enroll.open_eyes" = "Ongera uhumure amaso."
-"enroll.verify" = "Igenzura: reba muri kamera maze uhumbye rimwe."
+"enroll.verify" = "Igenzura: reba muri kamera maze uhumbye buhoro rimwe."
 "enroll.verify_failed" = "Igenzura ryananiranye, nta kintu cyabitswe."
 "enroll.done" = "Kwandikisha birarangiye (ingero {count} zabitswe)."
 "enroll.no_face" = "Nta sura ikoreshwa yabonetse. Genzura urumuri n'intera iri hagati yawe na kamera."
@@ -48,6 +48,7 @@
 "cli.doctor.policy" = "Amabwiriza: RGB idafite umutekano iremewe: {rgb}, igikoresho kibitse amakuru y'ibanga: {sensitive}"
 "cli.doctor.models_missing" = "Dosiye ya modeli ntiboneka: {path}"
 "cli.doctor.emitter_dark" = "Ishusho ya infrarouge yijimye hafi ya yose: birashoboka ko itara rya IR rizimye. Rishyireho ukoresheje linux-enable-ir-emitter hanyuma winjize ibyavuyemo: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy nayo irakora muri PAM ({files}). Porogaramu ebyiri zimenya isura zirwanira kamera ya IR kandi zikora imwe nyuma y'indi – kuraho Howdy (urugero sudo apt remove howdy) cyangwa uhagarike FROGGER."
 "cli.doctor.depth_found" = "Sensor y'ubujyakuzimu yabonetse: {name} ({device}) – igenzura ry'ubujyakuzimu ry'igerageza: {mode}"
 "cli.doctor.lid_closed" = "Mudasobwa igendanwa irafunze – kamera ntishobora kukubona."
 "cli.doctor.daemon_ok" = "Daemon irakora (verisiyo {version})."

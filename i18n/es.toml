@@ -1,8 +1,8 @@
 # Catálogo de mensajes de FROGGER – Español.
 
-"auth.start" = "Reconocimiento facial: mire a la cámara y parpadee una vez."
+"auth.start" = "Reconocimiento facial: mire a la cámara y parpadee lentamente una vez."
 "auth.start_ir_only" = "Reconocimiento facial: mire a la cámara."
-"auth.blink" = "Parpadee, por favor."
+"auth.blink" = "Parpadee lentamente, por favor."
 "auth.success" = "Rostro reconocido."
 "auth.no_face" = "No se ha detectado ningún rostro."
 "auth.not_recognized" = "Rostro no reconocido."
@@ -19,7 +19,7 @@
 "enroll.turn" = "Ahora gire lentamente la cabeza un poco hacia la izquierda y hacia la derecha."
 "enroll.close_eyes" = "Ahora cierre los ojos durante unos dos segundos."
 "enroll.open_eyes" = "Vuelva a abrir los ojos."
-"enroll.verify" = "Verificación: mire a la cámara y parpadee una vez."
+"enroll.verify" = "Verificación: mire a la cámara y parpadee lentamente una vez."
 "enroll.verify_failed" = "La verificación ha fallado, no se ha guardado nada."
 "enroll.done" = "Registro completado ({count} muestras guardadas)."
 "enroll.no_face" = "No se ha encontrado ningún rostro utilizable. Compruebe la iluminación y la distancia a la cámara."
@@ -47,6 +47,7 @@
 "cli.doctor.policy" = "Política: RGB inseguro permitido: {rgb}, dispositivo sensible: {sensitive}"
 "cli.doctor.models_missing" = "Falta el archivo de modelo: {path}"
 "cli.doctor.emitter_dark" = "La imagen infrarroja es casi negra: probablemente el emisor IR está apagado. Configúrelo con linux-enable-ir-emitter e importe el resultado: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy también está activo en la configuración de PAM ({files}). Dos módulos faciales compiten por la cámara IR y se ejecutan uno tras otro: elimine Howdy (p. ej. sudo apt remove howdy) o desactive FROGGER."
 "cli.doctor.depth_found" = "Sensor de profundidad encontrado: {name} ({device}) – comprobación de profundidad experimental: {mode}"
 "cli.doctor.lid_closed" = "La tapa del portátil está cerrada – la cámara no puede verle."
 "cli.doctor.daemon_ok" = "El demonio está en ejecución (versión {version})."

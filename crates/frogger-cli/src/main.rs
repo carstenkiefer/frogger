@@ -389,6 +389,10 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
         }
         if let Some(st) = stats {
             println!("      · mean brightness {:.0}/255", st.mean_brightness);
+            println!(
+                "      · ~{:.0} frames/s, ~{:.0} lit by the emitter",
+                st.fps, st.lit_fps
+            );
             if *kind == CameraKind::Infrared && camera::emitter_looks_off(st) {
                 println!("      (!) {}", tr(lang, "cli.doctor.emitter_dark", &[]));
             }
@@ -471,6 +475,17 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
         Err(e) => println!("✘ {e:#}"),
     }
     println!("  {}", pam_status_text(lang));
+    let others = other_face_modules();
+    if !others.is_empty() {
+        println!(
+            "(!) {}",
+            tr(
+                lang,
+                "cli.doctor.other_face_module",
+                &[("files", &others.join(", "))]
+            )
+        );
+    }
     let encrypted = call(socket, Op::Status, lang)
         .ok()
         .and_then(|(_, _, d)| d)
@@ -703,6 +718,34 @@ fn pam_enabled() -> bool {
             })
             .unwrap_or(false)
     })
+}
+
+/// PAM files that also load another face-recognition module (Howdy). Two
+/// modules compete for the IR camera and run one after the other.
+fn other_face_modules() -> Vec<String> {
+    let Ok(rd) = std::fs::read_dir("/etc/pam.d") else {
+        return Vec::new();
+    };
+    let mut hits: Vec<String> = rd
+        .flatten()
+        // PAM only reads /etc/pam.d/<service>; backup copies (sudo.bak,
+        // sudo~, sudo.dpkg-old …) are never used.
+        .filter(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            !name.contains('.') && !name.ends_with('~')
+        })
+        .filter(|e| {
+            std::fs::read_to_string(e.path())
+                .map(|s| {
+                    s.lines()
+                        .any(|l| !l.trim_start().starts_with('#') && l.contains("pam_howdy.so"))
+                })
+                .unwrap_or(false)
+        })
+        .map(|e| e.path().display().to_string())
+        .collect();
+    hits.sort();
+    hits
 }
 
 fn pam_status_text(lang: &str) -> String {

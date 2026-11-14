@@ -1,8 +1,8 @@
 # FROGGER メッセージカタログ – 日本語。
 
-"auth.start" = "顔認証: カメラを見て、一度まばたきしてください。"
+"auth.start" = "顔認証: カメラを見て、ゆっくり一度まばたきしてください。"
 "auth.start_ir_only" = "顔認証: カメラを見てください。"
-"auth.blink" = "まばたきしてください。"
+"auth.blink" = "ゆっくりまばたきしてください。"
 "auth.success" = "顔を認識しました。"
 "auth.no_face" = "顔が検出されませんでした。"
 "auth.not_recognized" = "顔を認識できませんでした。"
@@ -19,7 +19,7 @@
 "enroll.turn" = "次に、ゆっくりと頭を少し左右に向けてください。"
 "enroll.close_eyes" = "次に、約 2 秒間目を閉じてください。"
 "enroll.open_eyes" = "目を開けてください。"
-"enroll.verify" = "確認: カメラを見て、一度まばたきしてください。"
+"enroll.verify" = "確認: カメラを見て、ゆっくり一度まばたきしてください。"
 "enroll.verify_failed" = "確認に失敗しました。何も保存されていません。"
 "enroll.done" = "登録が完了しました ({count} 個のサンプルを保存)。"
 "enroll.no_face" = "使用できる顔が見つかりませんでした。照明とカメラとの距離を確認してください。"
@@ -47,6 +47,7 @@
 "cli.doctor.policy" = "ポリシー: 安全でない RGB を許可: {rgb}、機密デバイス: {sensitive}"
 "cli.doctor.models_missing" = "モデルファイルがありません: {path}"
 "cli.doctor.emitter_dark" = "赤外線画像がほぼ真っ黒です。IR エミッターがオフになっている可能性があります。linux-enable-ir-emitter で設定し、結果をインポートしてください: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy も PAM 設定で有効になっています ({files})。2 つの顔認証モジュールが IR カメラを奪い合い、順番に実行されます。Howdy を削除する（例: sudo apt remove howdy）か、FROGGER を無効にしてください。"
 "cli.doctor.depth_found" = "深度センサーが見つかりました: {name} ({device}) – 実験的な深度チェック: {mode}"
 "cli.doctor.lid_closed" = "ノートパソコンの蓋が閉じています – カメラにあなたが映りません。"
 "cli.doctor.daemon_ok" = "デーモンは実行中です (バージョン {version})。"

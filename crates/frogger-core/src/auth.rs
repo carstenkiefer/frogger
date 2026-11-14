@@ -92,11 +92,21 @@ impl FailReason {
     }
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+/// Per eye (left, right): similarity to the user's open / closed reference.
+type EyeComponents = [(f32, f32); 2];
+
+#[derive(Clone, Copy, Debug, PartialEq)]
 enum Blink {
     NeedOpen,
-    Open,
-    Closed { since_ms: u32 },
+    /// Eyes open; `reference` adapts to the current head pose.
+    Open {
+        reference: EyeComponents,
+    },
+    /// Eyelids moved towards closed relative to `reference`.
+    Closed {
+        since_ms: u32,
+        reference: EyeComponents,
+    },
     Done,
 }
 
@@ -123,6 +133,21 @@ pub struct Stats {
     /// Mean brightness (0-255) of faces in lit frames – compare with
     /// `liveness.min_ir_face_brightness` when tuning weak emitters.
     pub mean_face_brightness: f32,
+    /// Eye measurements taken (full and eye-only frames).
+    pub eye_samples: u32,
+    /// Largest drop of the open-minus-closed eye score (weaker eye) and the
+    /// largest rise of the similarity to the closed reference – compare with
+    /// the calibrated dip when a blink is not detected.
+    pub max_eye_dip: f32,
+    pub max_closed_rise: f32,
+    /// Calibrated thresholds of the enrolled user (margin for "open", dip
+    /// for a blink) and the best open score seen (weaker eye).
+    pub eye_margin: f32,
+    pub eye_dip_threshold: f32,
+    pub max_open_score: Option<f32>,
+    /// Furthest blink phase reached: 0 = eyes never classified open,
+    /// 1 = open, 2 = lids moved down, 3 = blink completed.
+    pub blink_phase: u8,
     /// Brightest face seen in a frame rejected as unlit.
     pub max_dark_face_brightness: f32,
     pub depth_live_frames: u32,
@@ -284,9 +309,9 @@ impl<'a> Verifier<'a> {
             None => {}
         }
 
-        let eye_state = match (&self.template.eyes, self.mode) {
-            (Some(cal), LivenessMode::Blink) => cal.state(&a.eyes),
-            _ => EyeState::Unknown,
+        let (eye_state, eye_components) = match (&self.template.eyes, self.mode) {
+            (Some(cal), LivenessMode::Blink) => (cal.state(&a.eyes), Some(cal.components(&a.eyes))),
+            _ => (EyeState::Unknown, None),
         };
         let sim = self.similarity(a);
         self.last_sim = sim;
@@ -305,7 +330,9 @@ impl<'a> Verifier<'a> {
             return Progress::Continue;
         }
 
-        self.advance_blink(obs.t, eye_state, sim);
+        if let Some(c) = eye_components {
+            self.advance_blink(obs.t, c, sim);
+        }
 
         let identity_ok = self.track_matches >= self.cfg.auth.min_matching_frames;
         let liveness_ok = match self.mode {
@@ -334,35 +361,93 @@ impl<'a> Verifier<'a> {
             self.stats.dark_frames += 1;
             return;
         }
-        let state = match (&self.template.eyes, self.mode) {
-            (Some(cal), LivenessMode::Blink) => cal.state(&e.eyes),
+        let components = match (&self.template.eyes, self.mode) {
+            (Some(cal), LivenessMode::Blink) => cal.components(&e.eyes),
             _ => return,
         };
-        self.advance_blink(t, state, self.last_sim);
+        self.advance_blink(t, components, self.last_sim);
     }
 
-    fn advance_blink(&mut self, t: f32, eye_state: EyeState, sim: f32) {
+    /// Blink detection relative to the person's own open-eye level:
+    ///
+    /// * open: both eyes clearly closer to the open than to the closed
+    ///   reference; the reference follows small pose changes,
+    /// * blink start: on **both** eyes the open-minus-closed score drops by
+    ///   at least the calibrated dip **and** the similarity to the closed
+    ///   reference rises – a shaking or shifted photo lowers both
+    ///   similarities and therefore never qualifies,
+    /// * blink end: both eyes back near the open reference within
+    ///   `max_closed_secs`.
+    fn advance_blink(&mut self, t: f32, cur: EyeComponents, sim: f32) {
+        let Some(cal) = &self.template.eyes else { return };
+        let margin = cal.margin;
+        let dip = cal.dip_threshold();
         let lv = &self.cfg.liveness;
         let threshold = self.cfg.auth.similarity_threshold;
         let t_ms = (t * 1000.0) as u32;
-        self.blink = match (self.blink, eye_state) {
-            (Blink::Done, _) => Blink::Done,
-            (Blink::NeedOpen, EyeState::Open) if sim >= threshold => Blink::Open,
-            (Blink::NeedOpen, _) => Blink::NeedOpen,
-            (Blink::Open, EyeState::Closed) => Blink::Closed { since_ms: t_ms },
-            (Blink::Open, _) => Blink::Open,
-            (Blink::Closed { since_ms }, s) => {
+        let score = |c: (f32, f32)| c.0 - c.1;
+        let open_now = cur.iter().all(|&c| score(c) > margin);
+        self.stats.eye_samples += 1;
+        self.stats.eye_margin = margin;
+        self.stats.eye_dip_threshold = dip;
+        let open_score = cur.iter().map(|&c| score(c)).fold(f32::INFINITY, f32::min);
+        self.stats.max_open_score = Some(
+            self.stats
+                .max_open_score
+                .map_or(open_score, |m| m.max(open_score)),
+        );
+
+        if let Blink::Open { reference } | Blink::Closed { reference, .. } = self.blink {
+            let drop = (0..2)
+                .map(|i| score(reference[i]) - score(cur[i]))
+                .fold(f32::INFINITY, f32::min);
+            let rise = (0..2)
+                .map(|i| cur[i].1 - reference[i].1)
+                .fold(f32::INFINITY, f32::min);
+            self.stats.max_eye_dip = self.stats.max_eye_dip.max(drop);
+            self.stats.max_closed_rise = self.stats.max_closed_rise.max(rise);
+        }
+        let dipped = |r: &EyeComponents| {
+            (0..2).all(|i| score(r[i]) - score(cur[i]) >= dip && cur[i].1 - r[i].1 >= dip / 3.0)
+        };
+        let recovered = |r: &EyeComponents| (0..2).all(|i| score(r[i]) - score(cur[i]) <= dip / 2.0);
+
+        self.blink = match self.blink {
+            Blink::Done => Blink::Done,
+            Blink::NeedOpen if open_now && sim >= threshold => Blink::Open { reference: cur },
+            Blink::NeedOpen => Blink::NeedOpen,
+            Blink::Open { reference } if dipped(&reference) => Blink::Closed {
+                since_ms: t_ms,
+                reference,
+            },
+            Blink::Open { reference } if open_now => {
+                // Follow slow changes (head pose, exposure) of the open level.
+                let mut r = reference;
+                for i in 0..2 {
+                    r[i] = (0.7 * r[i].0 + 0.3 * cur[i].0, 0.7 * r[i].1 + 0.3 * cur[i].1);
+                }
+                Blink::Open { reference: r }
+            }
+            open @ Blink::Open { .. } => open,
+            Blink::Closed { since_ms, reference } => {
                 let closed_for = t_ms.saturating_sub(since_ms) as f32 / 1000.0;
                 if closed_for > lv.max_closed_secs {
                     Blink::NeedOpen
-                } else if s == EyeState::Open && sim >= threshold {
+                } else if recovered(&reference) && sim >= threshold {
                     Blink::Done
                 } else {
-                    Blink::Closed { since_ms }
+                    Blink::Closed { since_ms, reference }
                 }
             }
         };
         self.stats.blink_detected = self.blink == Blink::Done;
+        let phase = match self.blink {
+            Blink::NeedOpen => 0,
+            Blink::Open { .. } => 1,
+            Blink::Closed { .. } => 2,
+            Blink::Done => 3,
+        };
+        self.stats.blink_phase = self.stats.blink_phase.max(phase);
     }
 
     /// Most specific reason why the attempt did not succeed.
@@ -669,6 +754,116 @@ mod tests {
         // A steady camera never produces off frames.
         let mut g = StrobeFilter::default();
         assert!((0..20).all(|i| !g.is_off(100.0 + (i % 3) as f32)));
+    }
+
+    fn mix(a: &[f32], b: &[f32], w: f32) -> Vec<f32> {
+        let mut v: Vec<f32> = a.iter().zip(b).map(|(x, y)| (1.0 - w) * x + w * y).collect();
+        standardize(&mut v);
+        v
+    }
+
+    /// Eyes between open (0.0) and closed (1.0), per eye.
+    fn lids(left: f32, right: f32) -> EyePair {
+        let (o, c) = (eye(OPEN), eye(CLOSED));
+        EyePair {
+            left: mix(&o.left, &c.left, left),
+            right: mix(&o.right, &c.right, right),
+        }
+    }
+
+    fn obs_pair(t: f32, pair: EyePair) -> Observation {
+        let mut o = obs(t, 0.1, OPEN, 100.0);
+        o.analysis.as_mut().unwrap().eyes = pair;
+        o
+    }
+
+    fn eyes_only(t: f32, pair: EyePair) -> Observation {
+        Observation {
+            t,
+            chroma: 0.0,
+            analysis: None,
+            eyes_only: Some(EyeSample {
+                eyes: pair,
+                face_brightness: 120.0,
+            }),
+            emitter_off: false,
+            depth: None,
+        }
+    }
+
+    #[test]
+    fn half_closed_blink_is_detected() {
+        // Fast blinks are usually caught with the lids half way down.
+        let cfg = Config::default();
+        let seq = [
+            obs_pair(0.0, lids(0.0, 0.0)),
+            obs_pair(0.1, lids(0.0, 0.0)),
+            obs_pair(0.2, lids(0.0, 0.0)),
+            obs_pair(0.3, lids(0.5, 0.5)),
+            obs_pair(0.4, lids(0.0, 0.0)),
+        ];
+        assert!(matches!(run(&cfg, &seq).0, Progress::Success { .. }));
+    }
+
+    #[test]
+    fn blink_seen_in_single_eye_only_frame_is_detected() {
+        // Strobing emitter: the blink falls between two full analyses.
+        let cfg = Config::default();
+        let seq = [
+            obs_pair(0.0, lids(0.0, 0.0)),
+            obs_pair(0.2, lids(0.0, 0.0)),
+            obs_pair(0.4, lids(0.0, 0.0)),
+            eyes_only(0.47, lids(0.6, 0.6)),
+            obs_pair(0.6, lids(0.0, 0.0)),
+        ];
+        assert!(matches!(run(&cfg, &seq).0, Progress::Success { .. }));
+    }
+
+    #[test]
+    fn shaking_or_shifted_photo_is_not_a_blink() {
+        // Misalignment lowers the similarity to the open reference, but the
+        // patch does not become more similar to the closed one.
+        let cfg = Config::default();
+        let shifted = |k: usize| {
+            let mut p = eye(OPEN);
+            p.left.rotate_left(k);
+            p.right.rotate_left(k);
+            p
+        };
+        let noisy = || {
+            let mut p = eye(OPEN);
+            for (i, v) in p.left.iter_mut().enumerate() {
+                *v += ((i as f32 * 12.9898).sin() * 43758.545).fract() * 0.08;
+            }
+            standardize(&mut p.left);
+            p.right = p.left.clone();
+            p
+        };
+        for distortion in [shifted(1), shifted(2), shifted(5), noisy()] {
+            let mut seq: Vec<Observation> =
+                (0..4).map(|i| obs_pair(i as f32 * 0.1, lids(0.0, 0.0))).collect();
+            seq.push(obs_pair(0.4, distortion.clone()));
+            seq.push(obs_pair(0.5, lids(0.0, 0.0)));
+            seq.push(obs_pair(0.6, distortion));
+            seq.push(obs_pair(0.7, lids(0.0, 0.0)));
+            assert!(!matches!(run(&cfg, &seq).0, Progress::Success { .. }));
+        }
+    }
+
+    #[test]
+    fn one_eye_moving_is_not_a_blink() {
+        // Wink, or a print with one cut-out eye.
+        let cfg = Config::default();
+        let seq = [
+            obs_pair(0.0, lids(0.0, 0.0)),
+            obs_pair(0.1, lids(0.0, 0.0)),
+            obs_pair(0.2, lids(0.0, 0.0)),
+            obs_pair(0.3, lids(1.0, 0.0)),
+            obs_pair(0.4, lids(0.0, 0.0)),
+            obs_pair(0.5, lids(0.0, 1.0)),
+            obs_pair(0.6, lids(0.0, 0.0)),
+        ];
+        assert!(!matches!(run(&cfg, &seq).0, Progress::Success { .. }));
     }
 
     fn with_depth(mut o: Observation, v: DepthVerdict) -> Observation {

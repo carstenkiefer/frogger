@@ -1,8 +1,8 @@
 # كتالوج رسائل FROGGER – العربية.
 
-"auth.start" = "التعرّف على الوجه: انظر إلى الكاميرا ورمّش مرة واحدة."
+"auth.start" = "التعرف على الوجه: انظر إلى الكاميرا ورمش ببطء مرة واحدة."
 "auth.start_ir_only" = "التعرّف على الوجه: انظر إلى الكاميرا."
-"auth.blink" = "يُرجى الرمش."
+"auth.blink" = "يرجى الرمش ببطء."
 "auth.success" = "تم التعرّف على الوجه."
 "auth.no_face" = "لم يُكتشف أي وجه."
 "auth.not_recognized" = "لم يتم التعرّف على الوجه."
@@ -19,7 +19,7 @@
 "enroll.turn" = "الآن أدِر رأسك ببطء قليلًا إلى اليسار واليمين."
 "enroll.close_eyes" = "الآن أغمض عينيك لمدة ثانيتين تقريبًا."
 "enroll.open_eyes" = "افتح عينيك مجددًا."
-"enroll.verify" = "التحقق: انظر إلى الكاميرا ورمّش مرة واحدة."
+"enroll.verify" = "التحقق: انظر إلى الكاميرا ورمش ببطء مرة واحدة."
 "enroll.verify_failed" = "فشل التحقق، ولم يُحفظ أي شيء."
 "enroll.done" = "اكتمل التسجيل (تم حفظ {count} عينة)."
 "enroll.no_face" = "لم يُعثر على وجه صالح للاستخدام. تحقّق من الإضاءة والمسافة إلى الكاميرا."
@@ -47,6 +47,7 @@
 "cli.doctor.policy" = "السياسة: السماح بـ RGB غير الآمن: {rgb}، جهاز حساس: {sensitive}"
 "cli.doctor.models_missing" = "ملف النموذج مفقود: {path}"
 "cli.doctor.emitter_dark" = "صورة الأشعة تحت الحمراء شبه سوداء: يبدو أن باعث الأشعة تحت الحمراء مطفأ. اضبطه باستخدام linux-enable-ir-emitter ثم استورد النتيجة: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "Howdy مفعّل أيضًا في إعدادات PAM ({files}). تتنافس وحدتا تعرّف على الوجه على كاميرا الأشعة تحت الحمراء وتعملان الواحدة تلو الأخرى – أزل Howdy (مثلًا sudo apt remove howdy) أو عطّل FROGGER."
 "cli.doctor.depth_found" = "تم العثور على مستشعر عمق: {name} ({device}) – فحص العمق التجريبي: {mode}"
 "cli.doctor.lid_closed" = "غطاء الحاسوب المحمول مغلق – لا تستطيع الكاميرا رؤيتك."
 "cli.doctor.daemon_ok" = "الخدمة الخلفية قيد التشغيل (الإصدار {version})."

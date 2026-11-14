@@ -1,8 +1,8 @@
 # Catálogo de mensagens do FROGGER – Português.
 
-"auth.start" = "Reconhecimento facial: olhe para a câmera e pisque uma vez."
+"auth.start" = "Reconhecimento facial: olhe para a câmera e pisque devagar uma vez."
 "auth.start_ir_only" = "Reconhecimento facial: olhe para a câmera."
-"auth.blink" = "Pisque, por favor."
+"auth.blink" = "Pisque devagar, por favor."
 "auth.success" = "Rosto reconhecido."
 "auth.no_face" = "Nenhum rosto detectado."
 "auth.not_recognized" = "Rosto não reconhecido."
@@ -19,7 +19,7 @@
 "enroll.turn" = "Agora vire a cabeça lentamente um pouco para a esquerda e para a direita."
 "enroll.close_eyes" = "Agora feche os olhos por cerca de dois segundos."
 "enroll.open_eyes" = "Abra os olhos novamente."
-"enroll.verify" = "Verificação: olhe para a câmera e pisque uma vez."
+"enroll.verify" = "Verificação: olhe para a câmera e pisque devagar uma vez."
 "enroll.verify_failed" = "A verificação falhou, nada foi salvo."
 "enroll.done" = "Cadastro concluído ({count} amostras armazenadas)."
 "enroll.no_face" = "Nenhum rosto utilizável encontrado. Verifique a iluminação e a distância até a câmera."
@@ -47,6 +47,7 @@
 "cli.doctor.policy" = "Política: RGB inseguro permitido: {rgb}, dispositivo sensível: {sensitive}"
 "cli.doctor.models_missing" = "Arquivo de modelo ausente: {path}"
 "cli.doctor.emitter_dark" = "A imagem infravermelha está quase preta: o emissor IR provavelmente está desligado. Configure-o com linux-enable-ir-emitter e importe o resultado: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.other_face_module" = "O Howdy também está ativo na configuração do PAM ({files}). Dois módulos faciais disputam a câmera IR e são executados um após o outro – remova o Howdy (p. ex. sudo apt remove howdy) ou desative o FROGGER."
 "cli.doctor.depth_found" = "Sensor de profundidade encontrado: {name} ({device}) – verificação de profundidade experimental: {mode}"
 "cli.doctor.lid_closed" = "A tampa do notebook está fechada – a câmera não consegue ver você."
 "cli.doctor.daemon_ok" = "O daemon está em execução (versão {version})."
