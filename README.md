@@ -31,6 +31,10 @@ log you in**.
   Melayu, Ikinyarwanda, Runyankore – chosen from
   `LANGUAGE`/`LC_ALL`/`LC_MESSAGES`/`LANG` of the caller (Runyankore has no
   glibc locale: use `LANGUAGE=nyn`).
+* **Depth cameras (experimental):** with an Intel RealSense or another V4L2
+  depth camera (`Z16`), `camera.depth.mode = "auto"` additionally rejects
+  flat faces; `"required"` demands depth confirmation. Off by default until
+  validated on real hardware.
 * **Face data sealed to the TPM** (systemd ≥ 254): templates are encrypted
   with a key that only this device's TPM 2.0 chip can unlock.
 * **amd64 and arm64**, `.deb` and `.rpm`, built and install-tested in CI.

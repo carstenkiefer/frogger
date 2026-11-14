@@ -1,6 +1,7 @@
 //! Vision pipeline: detection → alignment → embedding / eye patches.
 
 pub mod align;
+pub mod depth;
 pub mod detect;
 pub mod embed;
 pub mod eyes;

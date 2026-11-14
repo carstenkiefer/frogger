@@ -25,6 +25,8 @@ phrases below are the least certain ones.
 - English loanwords kept: screen, service, configuration, settings, file
   permissions, encryption, profile, controls.
 - Confirmation word `cli.setup.yes_word` = "EGO" – is this the natural "yes"?
+- Depth check (`auth.not_3d`, `cli.doctor.depth_found`): "obuzima" for depth,
+  "nibusherekyere" for flat – both uncertain.
 
 ### Kinyarwanda
 - French loanwords "infrarouge", "ecran", "chiffrement" (alternatives:
@@ -36,3 +38,5 @@ phrases below are the least certain ones.
 - Sensitive data: "amakuru y'ibanga"; glasses: "amadarubindi agarura urumuri
   cyane"; lid closed rephrased as "the laptop is closed".
 - Confirmation word "YEGO".
+- Depth check (`auth.not_3d`, `cli.doctor.depth_found`): "ubujyakuzimu" for
+  depth, "irambuye" for flat.

@@ -4,7 +4,7 @@
 
 use crate::auth::{FailReason, Observation, Progress, StrobeFilter, Verifier};
 use crate::camera::{self, Camera, CameraKind};
-use crate::config::{Config, LivenessMode};
+use crate::config::{Config, DepthMode, LivenessMode};
 use crate::store::{self, Sample, Store, UserTemplate, FORMAT_VERSION};
 use crate::vision::eyes::{average, EyeCalibration, EyePair};
 use crate::vision::{self, Analysis, Pipeline};
@@ -18,6 +18,8 @@ use std::time::{Duration, Instant};
 /// only sample the eyes.
 const FULL_INTERVAL: Duration = Duration::from_millis(200);
 const MAX_SAMPLES: usize = 40;
+/// A depth frame older than this is not used for the current IR frame.
+const DEPTH_MAX_AGE: Duration = Duration::from_millis(150);
 const ENROLL_SAMPLES: usize = 10;
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -81,6 +83,29 @@ impl Engine {
         Ok((cam, kind))
     }
 
+    /// Start the depth camera if configured (experimental). `required`
+    /// without a working sensor makes face authentication unavailable.
+    fn open_depth(&self, cam: &Camera) -> Result<Option<camera::DepthStream>> {
+        let dc = &self.cfg.camera.depth;
+        if dc.mode == DepthMode::Off {
+            return Ok(None);
+        }
+        let stream = camera::find_depth_camera(dc, &cam.info).map(|p| (camera::DepthStream::start(&p), p));
+        match (stream, dc.mode) {
+            (Some((Ok(s), p)), _) => {
+                log::debug!("depth camera {} active", p.display());
+                Ok(Some(s))
+            }
+            (Some((Err(e), _)), DepthMode::Required) => Err(e.context("depth camera required")),
+            (None, DepthMode::Required) => anyhow::bail!("depth camera required but none found"),
+            (Some((Err(e), _)), _) => {
+                log::warn!("depth camera unusable, continuing without: {e:#}");
+                Ok(None)
+            }
+            (None, _) => Ok(None),
+        }
+    }
+
     /// Run one recognition attempt against `template`.
     pub fn attempt(&self, template: &UserTemplate, lang: &str, emit: Emit) -> Result<AttemptReport> {
         let start = Instant::now();
@@ -90,6 +115,7 @@ impl Engine {
             kind = CameraKind::Infrared; // verified per frame via chroma
         }
         let ir = infrared && kind != CameraKind::Rgb;
+        let depth = self.open_depth(&cam)?;
         let mut verifier = Verifier::new(&self.cfg, template, ir);
         let mut strobe = StrobeFilter::default();
         let timeout = Duration::from_secs_f32(self.cfg.auth.timeout_secs);
@@ -113,6 +139,7 @@ impl Engine {
                     analysis: None,
                     eyes_only: None,
                     emitter_off: true,
+                    depth: None,
                 });
                 continue;
             }
@@ -123,12 +150,26 @@ impl Engine {
             let obs = if full_due {
                 let analysis = self.pipeline.analyse(&frame.image)?;
                 last_full = analysis.clone().map(|a| (Instant::now(), a));
+                let depth_verdict = match (&depth, &analysis) {
+                    (Some(d), Some(a)) => Some(match d.latest(DEPTH_MAX_AGE) {
+                        Some(img) => vision::depth::measure(
+                            &img,
+                            &a.face,
+                            frame.image.width,
+                            frame.image.height,
+                            self.cfg.camera.depth.min_relief_mm,
+                        ),
+                        None => vision::depth::DepthVerdict::Invalid,
+                    }),
+                    _ => None,
+                };
                 Observation {
                     t,
                     chroma: frame.chroma,
                     analysis,
                     eyes_only: None,
                     emitter_off: false,
+                    depth: depth_verdict,
                 }
             } else {
                 let (_, a) = last_full.as_ref().expect("checked above");
@@ -138,6 +179,7 @@ impl Engine {
                     analysis: None,
                     eyes_only: Some(vision::eye_sample(&frame.image, a)),
                     emitter_off: false,
+                    depth: None,
                 }
             };
             match verifier.feed(&obs) {
