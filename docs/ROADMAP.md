@@ -56,6 +56,14 @@ fixes always come first.
     every clip set are documented in the voice package.
   * If the quality is not convincing for a language, it simply gets no
     voice package.
+  * The clips live in a **separate repository** (`frogger-voices`) with its
+    own CI that builds the architecture-independent voice packages. This
+    repository stays entirely MIT/Apache, so its release tarballs can be
+    packaged unchanged (no repacking to remove differently licensed
+    audio), and binary audio never bloats its history. Interface: one file
+    per message key (`enroll.close_eyes.opus`) under
+    `/usr/share/frogger/voices/<lang>/`; the voices CI checks completeness
+    against the prompts of a given FROGGER version.
 * **Emitter shading check:** compare lit and unlit frames of a strobing
   emitter; a 3D face shows distance falloff and shading (nose tip brighter
   than cheeks), a print is nearly uniform. Only after real-world traces
