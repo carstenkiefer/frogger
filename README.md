@@ -11,6 +11,7 @@ log you in**.
 > and simulated camera input, but not yet validated on a broad range of IR
 > camera hardware ([test procedure](docs/HARDWARE-TESTING.md)). Do not rely on
 > it as the only safeguard yet; the password always keeps working.
+> What comes next: [roadmap](docs/ROADMAP.md).
 
 ## Highlights
 

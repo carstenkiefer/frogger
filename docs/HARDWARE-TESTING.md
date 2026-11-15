@@ -48,12 +48,15 @@ below `auth.similarity_threshold` (aim for a margin of ≥ 0.1).
 | Colour print of the user, held still and moved by hand | `no_blink` |
 | Print of an **IR** frame of the user (capture with `v4l2-ctl`, laser print, matte and glossy paper) | `no_blink` |
 | Two IR prints (eyes open / eyes closed) swapped in front of the camera | `no_blink` (track reset) |
+| IR print with the eyes cut out, held in front of a person who blinks | must fail; blink alone does not stop this – the planned parallax and glint checks target it ([roadmap](ROADMAP.md)); report the result |
 | Print held next to the real user | `multiple_faces` |
 | User present, request via SSH (`ssh localhost sudo -k true`) | face auth skipped, password prompt |
 | Same as above after `systemd-run --user --scope sudo -k true` inside the SSH session | skipped (`journalctl -u frogger` shows "not local") |
 
 Document any success of a presentation attack as a security issue (see
-[SECURITY.md](../SECURITY.md)).
+[SECURITY.md](../SECURITY.md)). Do not publish IR images of test persons
+(see the [test data policy](ROADMAP.md#test-data-policy)); shred prints
+after testing.
 
 ## 5. Desktop flows
 
