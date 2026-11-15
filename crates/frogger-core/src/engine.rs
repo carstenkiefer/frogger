@@ -570,7 +570,10 @@ impl Engine {
             right: average(&open_eyes.iter().map(|e| e.right.as_slice()).collect::<Vec<_>>()),
         };
         let eye_sim = |e: &EyePair| dot(&e.left, &open_ref.left).min(dot(&e.right, &open_ref.right));
-        let open_floor = open_eyes.iter().map(eye_sim).fold(f32::INFINITY, f32::min);
+        // A low quantile instead of the minimum: a single blurred or
+        // misaligned sample must not drag the threshold down (field test:
+        // the minimum fell to -0.2, which closed eyes never reach).
+        let open_floor = low_quantile(open_eyes.iter().map(eye_sim).collect());
         let closed_below = open_floor - CLOSED_MARGIN;
         let usable = |a: &Analysis| {
             vision::cosine(&a.embedding, &mean) >= 0.5 && (yaw(&a.face) - base_yaw).abs() < TURN_YAW
@@ -714,6 +717,15 @@ fn yaw(f: &vision::detect::Face) -> f32 {
     (nose[0] - (a[0] + b[0]) / 2.0) / f.interocular().max(1.0)
 }
 
+/// Value below which about a quarter of the samples lie (robust "floor").
+fn low_quantile(mut v: Vec<f32>) -> f32 {
+    if v.is_empty() {
+        return 0.0;
+    }
+    v.sort_by(f32::total_cmp);
+    v[v.len() / 4]
+}
+
 fn median(mut v: Vec<f32>) -> f32 {
     if v.is_empty() {
         return 0.0;
@@ -774,6 +786,14 @@ mod tests {
         assert!((yaw(&face(42.0)) + 0.2).abs() < 1e-6);
         // A moderate head turn clearly exceeds the turn threshold.
         assert!(yaw(&face(54.0)) >= TURN_YAW);
+    }
+
+    #[test]
+    fn low_quantile_ignores_a_single_outlier() {
+        let open = vec![0.82, 0.79, -0.2, 0.85, 0.8, 0.77];
+        let q = low_quantile(open);
+        assert!(q > 0.7, "{q}");
+        assert_eq!(low_quantile(vec![0.5]), 0.5);
     }
 
     #[test]
