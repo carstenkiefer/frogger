@@ -13,6 +13,13 @@ fixes always come first.
   policy for the parallel service.
 * Optional confirmation after recognition (unlock only after a key press).
 
+**Enrollment**
+* Live feedback per frame: "move closer", "move back a little", "keep
+  your face centred", "too dark" – the checks exist internally, the user
+  just doesn't see them yet.
+* `frogger refine`: add samples to an existing enrollment later (with
+  glasses, different light, another position) without starting over.
+
 **Liveness hardening** (passive, no new models)
 * **Corneal glint check:** the IR emitter must produce a specular highlight
   on both corneas that appears in lit frames and disappears in unlit frames
