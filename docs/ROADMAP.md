@@ -44,11 +44,18 @@ fixes always come first.
 
 * **Spoken prompts during enrollment (only if they sound good):** our own
   voice instead of the system speech synthesizer – short clips for the fixed
-  enrollment prompts in every language, generated once with a small local
-  neural TTS model (e.g. Piper or Kokoro voices with a suitable license) or
-  recorded by native speakers, and played like the system sounds. No TTS
-  engine at runtime. If the quality is not convincing, enrollment keeps
-  using system sounds only.
+  enrollment prompts, played like the system sounds; no TTS engine at
+  runtime.
+  * Clips per language in **separate, optional packages**
+    (`frogger-voice-<lang>`). FROGGER works without them and falls back to
+    system sounds, so distributions can leave them out or ship them in a
+    different section without touching FROGGER itself.
+  * Sources: native-speaker recordings (preferred for Kinyarwanda and
+    Runyankore), or clips generated once with a small local neural TTS model
+    (e.g. Piper, Kokoro, MMS). The origin, model, license and attribution of
+    every clip set are documented in the voice package.
+  * If the quality is not convincing for a language, it simply gets no
+    voice package.
 * **Emitter shading check:** compare lit and unlit frames of a strobing
   emitter; a 3D face shows distance falloff and shading (nose tip brighter
   than cheeks), a print is nearly uniform. Only after real-world traces
