@@ -107,6 +107,23 @@ pub enum Event {
     },
     /// Protocol / internal error. Treated like `Unavailable` by PAM.
     Error { message: String },
+    /// Audible signal for the user (enrollment: the eyes may be closed, so
+    /// the terminal cannot be read). Only sent to the `frogger` CLI.
+    Cue { cue: Cue },
+}
+
+/// Kinds of audible signals.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "snake_case")]
+pub enum Cue {
+    /// A step is complete; the next instruction follows.
+    Step,
+    /// Closed eyes were recorded: open them again.
+    EyesClosed,
+    /// The operation succeeded.
+    Done,
+    /// The operation failed.
+    Failed,
 }
 
 impl Event {

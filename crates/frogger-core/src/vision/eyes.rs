@@ -111,6 +111,13 @@ pub enum EyeState {
     Unknown,
 }
 
+/// Value at fraction `q` (0..1) of the sorted samples.
+fn quantile(mut v: Vec<f32>, q: f32) -> f32 {
+    v.sort_by(f32::total_cmp);
+    let i = ((v.len() - 1) as f32 * q).round() as usize;
+    v[i]
+}
+
 impl EyeCalibration {
     /// Build from enrollment samples. Returns `None` when open and closed
     /// references are too similar to be told apart reliably (e.g. the user
@@ -135,10 +142,18 @@ impl EyeCalibration {
         // Separation: how well do the samples themselves separate?
         let open_scores: Vec<f32> = open.iter().map(|p| cal.score(p)).collect();
         let closed_scores: Vec<f32> = closed.iter().map(|p| cal.score(p)).collect();
-        let min_open = open_scores.iter().cloned().fold(f32::INFINITY, f32::min);
-        let max_closed = closed_scores.iter().cloned().fold(f32::NEG_INFINITY, f32::max);
+        // Quantiles instead of min/max: one blurred or misaligned sample
+        // must not make an otherwise clear separation fail.
+        let min_open = quantile(open_scores, 0.25);
+        let max_closed = quantile(closed_scores, 0.75);
         let gap = min_open - max_closed;
         if gap < 0.10 {
+            log::info!(
+                "eye calibration: open/closed not separable (open {min_open:.3}, closed {max_closed:.3}, \
+                 gap {gap:.3} < 0.10; {} open, {} closed samples)",
+                open.len(),
+                closed.len()
+            );
             return None;
         }
         // Require each frame to be clearly on one side: a third of the gap.

@@ -18,8 +18,12 @@
 
 "enroll.start" = "Kwandikisha isura ya {user}. Reba neza imbere muri kamera."
 "enroll.turn" = "Noneho hindukiza umutwe buhoro buhoro gato ibumoso n'iburyo."
-"enroll.close_eyes" = "Noneho humiriza amaso nk'amasegonda abiri."
+"enroll.close_eyes" = "Noneho humiriza amaso kugeza wumvise ijwi (nk'amasegonda abiri)."
 "enroll.open_eyes" = "Ongera uhumure amaso."
+"enroll.searching" = "Nta sura igaragara – reba muri kamera uri ku ntera usanzwe ukoreraho (cm 40–70)."
+"enroll.turn_other" = "Noneho hindukiriza umutwe ku rundi ruhande."
+"enroll.close_again" = "Amaso ahumirije ntaramenyekana – ongera uhumirize amaso kugeza wumvise ijwi."
+"enroll.verify_retry" = "Nta guhumbya kwabonetse – ongera uhumbye buhoro rimwe."
 "enroll.verify" = "Igenzura: reba muri kamera maze uhumbye buhoro rimwe."
 "enroll.verify_failed" = "Igenzura ryananiranye, nta kintu cyabitswe."
 "enroll.done" = "Kwandikisha birarangiye (ingero {count} zabitswe)."

@@ -6,6 +6,8 @@ use frogger_core::camera::{self, Camera, CameraKind};
 use frogger_core::config::{Config, CONFIG_PATH};
 use frogger_i18n::tr;
 use frogger_proto::{AuthStatus, Event, Op, Request, MAX_LINE, SOCKET_PATH};
+
+mod sound;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
 use std::path::{Path, PathBuf};
@@ -30,6 +32,9 @@ struct Cli {
     /// Daemon socket
     #[arg(long, global = true, default_value = SOCKET_PATH)]
     socket: String,
+    /// No audible signals during enrollment
+    #[arg(long, global = true)]
+    no_sound: bool,
     #[command(subcommand)]
     cmd: Cmd,
 }
@@ -85,6 +90,9 @@ enum Cmd {
 fn main() {
     let cli = Cli::parse();
     let lang = frogger_i18n::detect();
+    if cli.no_sound {
+        sound::ENABLED.store(false, std::sync::atomic::Ordering::Relaxed);
+    }
     if let Err(e) = run(cli, lang) {
         eprintln!("frogger: {e:#}");
         std::process::exit(1);
@@ -158,6 +166,7 @@ fn call(socket: &str, op: Op, lang: &str) -> Result<(AuthStatus, String, Option<
                 data,
             } => return Ok((status, message, data)),
             Event::Error { message } => bail!("{message}"),
+            Event::Cue { cue } => sound::play(cue),
         }
     }
 }

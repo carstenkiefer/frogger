@@ -201,6 +201,7 @@ fn converse(
             Event::Info { text } => on_info(&text),
             Event::Result { status, message, .. } => return Ok((status, message)),
             Event::Error { message } => return Err(message),
+            Event::Cue { .. } => {} // never sent for authentication
         }
     }
 }

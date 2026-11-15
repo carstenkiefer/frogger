@@ -17,8 +17,12 @@
 
 "enroll.start" = "Cadastrando o rosto de {user}. Olhe diretamente para a câmera."
 "enroll.turn" = "Agora vire a cabeça lentamente um pouco para a esquerda e para a direita."
-"enroll.close_eyes" = "Agora feche os olhos por cerca de dois segundos."
+"enroll.close_eyes" = "Agora feche os olhos até ouvir um sinal sonoro (cerca de dois segundos)."
 "enroll.open_eyes" = "Abra os olhos novamente."
+"enroll.searching" = "Nenhum rosto visível – olhe para a câmera da sua distância de trabalho habitual (40–70 cm)."
+"enroll.turn_other" = "Agora vire a cabeça para o outro lado."
+"enroll.close_again" = "Olhos fechados ainda não detectados – feche os olhos novamente até ouvir um sinal sonoro."
+"enroll.verify_retry" = "Nenhuma piscada detectada – pisque devagar mais uma vez, por favor."
 "enroll.verify" = "Verificação: olhe para a câmera e pisque devagar uma vez."
 "enroll.verify_failed" = "A verificação falhou, nada foi salvo."
 "enroll.done" = "Cadastro concluído ({count} amostras armazenadas)."

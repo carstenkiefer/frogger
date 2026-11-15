@@ -10,7 +10,7 @@ use frogger_core::engine::{Engine, Outcome};
 use frogger_core::session::{self, Roots};
 use frogger_i18n::tr;
 use frogger_proto::{
-    is_valid_username, to_line, AuthStatus, Event, Op, Request, MAX_LINE, PROTOCOL_VERSION, SOCKET_PATH,
+    is_valid_username, to_line, AuthStatus, Cue, Event, Op, Request, MAX_LINE, PROTOCOL_VERSION, SOCKET_PATH,
 };
 use std::collections::HashMap;
 use std::io::{BufRead, BufReader, Read, Write};
@@ -305,8 +305,10 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
                 return Ok(());
             }
             let engine = d.engine.lock().unwrap_or_else(|p| p.into_inner());
-            let mut emit = |s: String| c.info(s);
-            let outcome = engine.enroll(&user, label, accept_insecure_rgb, lang, &mut emit);
+            let conn = std::cell::RefCell::new(&mut c);
+            let mut emit = |s: String| conn.borrow_mut().info(s);
+            let mut cue = |k: Cue| conn.borrow_mut().send(&Event::Cue { cue: k });
+            let outcome = engine.enroll(&user, label, accept_insecure_rgb, lang, &mut emit, &mut cue);
             drop(engine);
             log::info!("enrollment of {user}: {outcome:?}");
             send_outcome(&mut c, outcome);
