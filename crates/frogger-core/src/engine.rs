@@ -49,6 +49,9 @@ const OPEN_WAIT: Duration = Duration::from_secs(5);
 /// How far below the least similar open-eye sample a frame must be to count
 /// as closed eyes.
 const CLOSED_MARGIN: f32 = 0.05;
+/// Identity check while the eyes are closed (embedding cosine to the open
+/// samples; closed eyes lower it, the multiple-faces check still applies).
+const CLOSED_MIN_IDENTITY: f32 = 0.35;
 /// Verification attempts at the end of enrollment.
 const VERIFY_TRIES: usize = 2;
 /// V4L2 buffers queued by the camera (see Camera::open).
@@ -483,6 +486,8 @@ impl Engine {
         let mut multi = 0u32;
         let mut hinted_no_face = false;
         let mut hinted_multi = false;
+        // Frames without a usable face (diagnostics).
+        let skipped = std::cell::Cell::new(0u32);
         // Next usable frame, or None when `limit` has passed. Emits a hint
         // when no face was seen for a while.
         let mut next = |cam: &mut Camera, since: Instant, limit: Duration, emit: Emit| -> Option<Analysis> {
@@ -491,6 +496,7 @@ impl Engine {
                 match self.enroll_frame(cam, infrared, &mut strobe, &mut multi) {
                     Some(a) => return Some(a),
                     None => {
+                        skipped.set(skipped.get() + 1);
                         if !hinted_multi && multi >= 5 {
                             hinted_multi = true;
                             emit(tr(lang, "enroll.multiple_faces", &[]));
@@ -598,11 +604,17 @@ impl Engine {
         // the minimum fell to -0.2, which closed eyes never reach).
         let open_floor = low_quantile(open_eyes.iter().map(eye_sim).collect());
         let closed_below = open_floor - CLOSED_MARGIN;
+        // Closed eyes lower the face embedding similarity noticeably (IR
+        // field test), and people move a little while their eyes are
+        // closed: looser identity and pose limits than for open eyes.
         let usable = |a: &Analysis| {
-            vision::cosine(&a.embedding, &mean) >= 0.5 && (yaw(&a.face) - base_yaw).abs() < TURN_YAW
+            vision::cosine(&a.embedding, &mean) >= CLOSED_MIN_IDENTITY
+                && (yaw(&a.face) - base_yaw).abs() < TURN_YAW * 1.5
         };
-        let mut closed: Vec<EyePair> = Vec::new();
+        let mut closed: Vec<(f32, EyePair)> = Vec::new();
         let mut lowest = f32::INFINITY;
+        let (mut seen, mut other_person, mut turned_away) = (0u32, 0u32, 0u32);
+        let skipped_before = skipped.get();
         for attempt in 0..CLOSE_TRIES {
             emit(tr(
                 lang,
@@ -618,14 +630,20 @@ impl Engine {
             let step = Instant::now();
             let mut closed_since: Option<Instant> = None;
             while let Some(a) = next(&mut cam, step, CLOSE_TRY, emit) {
+                seen += 1;
+                if vision::cosine(&a.embedding, &mean) < CLOSED_MIN_IDENTITY {
+                    other_person += 1;
+                    continue;
+                }
                 if !usable(&a) {
+                    turned_away += 1;
                     continue;
                 }
                 let sim = eye_sim(&a.eyes);
                 lowest = lowest.min(sim);
                 if sim < closed_below {
                     closed_since.get_or_insert_with(Instant::now);
-                    closed.push(a.eyes);
+                    closed.push((sim, a.eyes));
                 } else if sim >= open_floor && closed.len() >= MIN_CLOSED {
                     break; // eyes opened again after enough closed frames
                 }
@@ -639,9 +657,16 @@ impl Engine {
         }
         log::info!(
             "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
-             {closed_below:.3}, lowest {lowest:.3})",
-            closed.len()
+             {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {}, \
+             other identity {other_person}, head turned {turned_away})",
+            closed.len(),
+            skipped.get() - skipped_before
         );
+        // Only the clearest closed frames become the reference: frames taken
+        // while the lids were still moving would blur it.
+        closed.sort_by(|a, b| a.0.total_cmp(&b.0));
+        let keep = (closed.len().div_ceil(2)).max(MIN_CLOSED).min(closed.len());
+        let closed: Vec<EyePair> = closed.into_iter().take(keep).map(|(_, e)| e).collect();
         if closed.len() < MIN_CLOSED {
             return Outcome::Failure(tr(lang, "enroll.calibration_failed", &[]));
         }

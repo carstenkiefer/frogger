@@ -148,6 +148,12 @@ impl EyeCalibration {
         let max_closed = quantile(closed_scores, 0.75);
         let gap = min_open - max_closed;
         if gap < 0.10 {
+            log::info!(
+                "eye calibration: open/closed not separable (open {min_open:.3}, closed {max_closed:.3}, \
+                 gap {gap:.3} < 0.10; {} open, {} closed samples)",
+                open.len(),
+                closed.len()
+            );
             return None;
         }
         // Require each frame to be clearly on one side: a third of the gap.
