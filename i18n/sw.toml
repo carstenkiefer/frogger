@@ -17,11 +17,11 @@
 
 "enroll.start" = "Inasajili uso wa {user}. Tazama kamera moja kwa moja."
 "enroll.turn" = "Sasa geuza kichwa chako polepole kidogo kushoto na kulia."
-"enroll.close_eyes" = "Sasa funga macho yako kwa takriban sekunde mbili."
+"enroll.close_eyes" = "Sasa funga macho hadi usikie mlio (takriban sekunde mbili)."
 "enroll.open_eyes" = "Fungua macho yako tena."
 "enroll.searching" = "Hakuna uso unaoonekana – tazama kamera ukiwa umbali wako wa kawaida wa kazi (sm 40–70)."
 "enroll.turn_other" = "Sasa geuza kichwa upande mwingine."
-"enroll.close_again" = "Macho yaliyofungwa bado hayajatambuliwa – funga macho tena kwa takriban sekunde mbili."
+"enroll.close_again" = "Macho yaliyofungwa bado hayajatambuliwa – funga macho tena hadi usikie mlio."
 "enroll.verify_retry" = "Hakuna kupepesa kulikotambuliwa – tafadhali pepesa macho polepole mara moja tena."
 "enroll.verify" = "Uthibitishaji: tazama kamera na upepese macho polepole mara moja."
 "enroll.verify_failed" = "Uthibitishaji umeshindwa, hakuna kilichohifadhiwa."

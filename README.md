@@ -76,7 +76,9 @@ camera, enables the PAM integration (`pam-auth-update` on Debian/Ubuntu) and
 enrolls the invoking user. Enrollment takes 15–30 seconds: look at the
 camera, turn your head slightly to both sides, close your eyes for about two
 seconds when asked, then **blink slowly** once to verify. Each step waits
-until the camera has seen it and repeats the prompt if necessary.
+until the camera has seen it and repeats the prompt if necessary; a system
+sound tells you when to open your eyes again (`--no-sound` turns the sounds
+off).
 
 Many IR cameras need their emitter switched on via a UVC extension unit. If
 the image is dark, configure it with

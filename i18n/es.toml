@@ -17,11 +17,11 @@
 
 "enroll.start" = "Registrando el rostro de {user}. Mire directamente a la cámara."
 "enroll.turn" = "Ahora gire lentamente la cabeza un poco hacia la izquierda y hacia la derecha."
-"enroll.close_eyes" = "Ahora cierre los ojos durante unos dos segundos."
+"enroll.close_eyes" = "Ahora cierre los ojos hasta que oiga un tono (unos dos segundos)."
 "enroll.open_eyes" = "Vuelva a abrir los ojos."
 "enroll.searching" = "No se ve ningún rostro: mire a la cámara desde su distancia de trabajo habitual (40–70 cm)."
 "enroll.turn_other" = "Ahora gire la cabeza hacia el otro lado."
-"enroll.close_again" = "Todavía no se detectan los ojos cerrados: vuelva a cerrar los ojos durante unos dos segundos."
+"enroll.close_again" = "Todavía no se detectan los ojos cerrados: vuelva a cerrar los ojos hasta que oiga un tono."
 "enroll.verify_retry" = "No se detectó ningún parpadeo: parpadee lentamente una vez más."
 "enroll.verify" = "Verificación: mire a la cámara y parpadee lentamente una vez."
 "enroll.verify_failed" = "La verificación ha fallado, no se ha guardado nada."

@@ -17,11 +17,11 @@
 
 "enroll.start" = "Gesicht von {user} wird eingelernt. Bitte gerade in die Kamera schauen."
 "enroll.turn" = "Jetzt den Kopf langsam etwas nach links und rechts drehen."
-"enroll.close_eyes" = "Jetzt die Augen für etwa zwei Sekunden schließen."
+"enroll.close_eyes" = "Jetzt die Augen schließen, bis ein Ton erklingt (etwa zwei Sekunden)."
 "enroll.open_eyes" = "Augen wieder öffnen."
 "enroll.searching" = "Kein Gesicht im Bild – bitte aus dem üblichen Arbeitsabstand (40–70 cm) in die Kamera schauen."
 "enroll.turn_other" = "Jetzt zur anderen Seite drehen."
-"enroll.close_again" = "Geschlossene Augen noch nicht erkannt – bitte die Augen erneut für etwa zwei Sekunden schließen."
+"enroll.close_again" = "Geschlossene Augen noch nicht erkannt – bitte die Augen erneut schließen, bis ein Ton erklingt."
 "enroll.verify_retry" = "Kein Blinzeln erkannt – bitte noch einmal langsam blinzeln."
 "enroll.verify" = "Überprüfung: Bitte in die Kamera schauen und einmal langsam blinzeln."
 "enroll.verify_failed" = "Überprüfung fehlgeschlagen, es wurde nichts gespeichert."

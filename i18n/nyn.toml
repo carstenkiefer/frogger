@@ -18,11 +18,11 @@
 
 "enroll.start" = "Nituhandiika obuso bwa {user}. Reeba omuri kamera kurungi, otahindura omutwe."
 "enroll.turn" = "Hati hindura omutwe gwawe mpora mpora kakye ebumoso n'eburyo."
-"enroll.close_eyes" = "Hati humiriza amaisho gaawe nk'esekondi ibiri."
+"enroll.close_eyes" = "Hati humiriza amaisho gaawe okuhikya obwo oraahurire eiraka (nk'esekondi ibiri)."
 "enroll.open_eyes" = "Ongyere ohumuure amaisho gaawe."
 "enroll.searching" = "Tihariho buso oburikurebeka – reeba omuri kamera ori hare nk'oku okora buriijo (cm 40–70)."
 "enroll.turn_other" = "Hati hindura omutwe ogwerekye orubaju orundi."
-"enroll.close_again" = "Amaisho agahumirire tigaraabonekire – ongyere ohumirize amaisho nk'esekondi ibiri."
+"enroll.close_again" = "Amaisho agahumirire tigaraabonekire – ongyere ohumirize amaisho okuhikya obwo oraahurire eiraka."
 "enroll.verify_retry" = "Tihabonekire kuhumiriza – ninkushaba, ongyere ohumirize mpora kandi ohumuure amaisho omurundi gumwe."
 "enroll.verify" = "Okukyebera: reeba omuri kamera, ohumirize mpora kandi ohumuure amaisho omurundi gumwe."
 "enroll.verify_failed" = "Okukyebera kuremiirwe, tihariho kintu kyabiikirwe."

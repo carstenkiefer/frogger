@@ -10,6 +10,7 @@ use crate::vision::eyes::{average, EyeCalibration, EyePair};
 use crate::vision::{self, Analysis, Pipeline};
 use anyhow::Result;
 use frogger_i18n::tr;
+use frogger_proto::Cue;
 use serde::Serialize;
 use std::path::Path;
 use std::sync::{Arc, OnceLock};
@@ -423,7 +424,8 @@ impl Engine {
         camera::classify(&cam.info, stats.as_ref())
     }
 
-    /// Interactive enrollment.
+    /// Interactive enrollment. `cue` receives audible signals (the person
+    /// cannot read the terminal with closed eyes).
     pub fn enroll(
         &self,
         user: &str,
@@ -431,6 +433,25 @@ impl Engine {
         accept_rgb: bool,
         lang: &str,
         emit: Emit,
+        cue: &mut dyn FnMut(Cue),
+    ) -> Outcome {
+        let outcome = self.enroll_steps(user, label, accept_rgb, lang, emit, cue);
+        cue(if outcome == Outcome::Success {
+            Cue::Done
+        } else {
+            Cue::Failed
+        });
+        outcome
+    }
+
+    fn enroll_steps(
+        &self,
+        user: &str,
+        label: Option<String>,
+        accept_rgb: bool,
+        lang: &str,
+        emit: Emit,
+        cue: &mut dyn FnMut(Cue),
     ) -> Outcome {
         let fingerprint = match self.models() {
             Ok(m) => m.fingerprint.as_str(),
@@ -500,6 +521,7 @@ impl Engine {
                 last_kept = Instant::now();
             }
         }
+        cue(Cue::Step);
         let base_yaw = median(frontal.iter().map(|a| yaw(&a.face)).collect());
         frontal.retain(|a| (yaw(&a.face) - base_yaw).abs() < TURN_YAW);
 
@@ -535,6 +557,7 @@ impl Engine {
                 last_kept = Instant::now();
             }
         }
+        cue(Cue::Step);
         log::info!(
             "enrollment of {user}: {} frontal samples, {} turned samples (left {}, right {})",
             frontal.len(),
@@ -624,6 +647,7 @@ impl Engine {
         }
         // Step 4: open the eyes again; wait until they are (so the
         // verification does not start with closed eyes).
+        cue(Cue::EyesClosed);
         emit(tr(lang, "enroll.open_eyes", &[]));
         let step = Instant::now();
         while let Some(a) = next(&mut cam, step, OPEN_WAIT, emit) {

@@ -17,11 +17,11 @@
 
 "enroll.start" = "正在录入 {user} 的人脸。请直视摄像头。"
 "enroll.turn" = "现在请将头缓慢地稍向左、向右转动。"
-"enroll.close_eyes" = "现在请闭眼约两秒钟。"
+"enroll.close_eyes" = "现在闭上眼睛，直到听到提示音（约两秒）。"
 "enroll.open_eyes" = "请重新睁开眼睛。"
 "enroll.searching" = "画面中没有人脸——请在平常的工作距离（40–70 厘米）看向摄像头。"
 "enroll.turn_other" = "现在把头转向另一侧。"
-"enroll.close_again" = "尚未检测到闭眼——请再次闭眼约两秒钟。"
+"enroll.close_again" = "尚未检测到闭眼——请再次闭眼，直到听到提示音。"
 "enroll.verify_retry" = "未检测到眨眼——请再慢慢眨一次眼。"
 "enroll.verify" = "验证：请看向摄像头并缓慢眨眼一次。"
 "enroll.verify_failed" = "验证失败，未保存任何数据。"

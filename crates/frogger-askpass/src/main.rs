@@ -136,7 +136,7 @@ fn confirm(prompt: &str, lang: &str) -> bool {
                 return Err("daemon closed the connection".into());
             }
             match serde_json::from_slice::<Event>(&line).map_err(|e| e.to_string())? {
-                Event::Info { .. } => {}
+                Event::Info { .. } | Event::Cue { .. } => {}
                 Event::Result { status, .. } => return Ok(status),
                 Event::Error { message } => return Err(message),
             }

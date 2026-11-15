@@ -42,6 +42,13 @@ fixes always come first.
 
 ## 0.4
 
+* **Spoken prompts during enrollment (only if they sound good):** our own
+  voice instead of the system speech synthesizer – short clips for the fixed
+  enrollment prompts in every language, generated once with a small local
+  neural TTS model (e.g. Piper or Kokoro voices with a suitable license) or
+  recorded by native speakers, and played like the system sounds. No TTS
+  engine at runtime. If the quality is not convincing, enrollment keeps
+  using system sounds only.
 * **Emitter shading check:** compare lit and unlit frames of a strobing
   emitter; a 3D face shows distance falloff and shading (nose tip brighter
   than cheeks), a print is nearly uniform. Only after real-world traces

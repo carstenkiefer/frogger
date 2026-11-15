@@ -17,11 +17,11 @@
 
 "enroll.start" = "Mendaftarkan wajah {user}. Pandang terus ke kamera."
 "enroll.turn" = "Sekarang pusingkan kepala anda perlahan-lahan sedikit ke kiri dan ke kanan."
-"enroll.close_eyes" = "Sekarang pejamkan mata anda selama kira-kira dua saat."
+"enroll.close_eyes" = "Sekarang pejamkan mata sehingga anda mendengar bunyi (kira-kira dua saat)."
 "enroll.open_eyes" = "Buka semula mata anda."
 "enroll.searching" = "Tiada wajah kelihatan – lihat ke kamera dari jarak kerja biasa anda (40–70 cm)."
 "enroll.turn_other" = "Sekarang pusingkan kepala ke sebelah lagi."
-"enroll.close_again" = "Mata tertutup belum dikesan – pejamkan mata sekali lagi selama kira-kira dua saat."
+"enroll.close_again" = "Mata tertutup belum dikesan – pejamkan mata sekali lagi sehingga anda mendengar bunyi."
 "enroll.verify_retry" = "Kelipan tidak dikesan – sila kelipkan mata perlahan-lahan sekali lagi."
 "enroll.verify" = "Pengesahan: lihat ke kamera dan kelipkan mata perlahan-lahan sekali."
 "enroll.verify_failed" = "Pengesahan gagal, tiada apa-apa yang disimpan."
