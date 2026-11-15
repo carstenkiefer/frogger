@@ -42,13 +42,16 @@ const OTHER_SIDE_HINT: Duration = Duration::from_secs(3);
 /// Closed eyes: each try waits this long, then the prompt is repeated.
 const CLOSE_TRY: Duration = Duration::from_secs(6);
 const CLOSE_TRIES: usize = 3;
-const CLOSED_RECORD: Duration = Duration::from_millis(800);
-const MIN_CLOSED: usize = 3;
+/// Reaction time after the prompt: frames in this window are ignored.
+const CLOSE_GRACE: Duration = Duration::from_millis(500);
+const CLOSED_RECORD: Duration = Duration::from_millis(1000);
+const MIN_CLOSED: usize = 4;
 /// After "open your eyes": wait at most this long for open eyes.
 const OPEN_WAIT: Duration = Duration::from_secs(5);
-/// How far below the least similar open-eye sample a frame must be to count
-/// as closed eyes.
-const CLOSED_MARGIN: f32 = 0.05;
+/// How far below the typical open-eye similarity *both* eyes must drop for a
+/// frame to count as closed. Field test: open eyes ~0.85-0.94 with noise of
+/// a few hundredths, closed eyes 0.35-0.68.
+const CLOSED_MARGIN: f32 = 0.15;
 /// Identity check while the eyes are closed (embedding cosine to the open
 /// samples; closed eyes lower it, the multiple-faces check still applies).
 const CLOSED_MIN_IDENTITY: f32 = 0.35;
@@ -598,7 +601,10 @@ impl Engine {
             left: average(&open_eyes.iter().map(|e| e.left.as_slice()).collect::<Vec<_>>()),
             right: average(&open_eyes.iter().map(|e| e.right.as_slice()).collect::<Vec<_>>()),
         };
+        // Weaker eye (both must look open) and stronger eye (both must look
+        // closed): a single noisy eye patch is neither open nor closed.
         let eye_sim = |e: &EyePair| dot(&e.left, &open_ref.left).min(dot(&e.right, &open_ref.right));
+        let both_sim = |e: &EyePair| dot(&e.left, &open_ref.left).max(dot(&e.right, &open_ref.right));
         // A low quantile instead of the minimum: a single blurred or
         // misaligned sample must not drag the threshold down (field test:
         // the minimum fell to -0.2, which closed eyes never reach).
@@ -630,6 +636,9 @@ impl Engine {
             let step = Instant::now();
             let mut closed_since: Option<Instant> = None;
             while let Some(a) = next(&mut cam, step, CLOSE_TRY, emit) {
+                if step.elapsed() < CLOSE_GRACE {
+                    continue;
+                }
                 seen += 1;
                 if vision::cosine(&a.embedding, &mean) < CLOSED_MIN_IDENTITY {
                     other_person += 1;
@@ -639,12 +648,12 @@ impl Engine {
                     turned_away += 1;
                     continue;
                 }
-                let sim = eye_sim(&a.eyes);
+                let sim = both_sim(&a.eyes);
                 lowest = lowest.min(sim);
                 if sim < closed_below {
                     closed_since.get_or_insert_with(Instant::now);
                     closed.push((sim, a.eyes));
-                } else if sim >= open_floor && closed.len() >= MIN_CLOSED {
+                } else if eye_sim(&a.eyes) >= open_floor && closed.len() >= MIN_CLOSED {
                     break; // eyes opened again after enough closed frames
                 }
                 if closed_since.is_some_and(|t| t.elapsed() >= CLOSED_RECORD) && closed.len() >= MIN_CLOSED {
