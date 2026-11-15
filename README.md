@@ -73,9 +73,10 @@ sudo frogger setup
 
 `setup` checks the cameras, explains whether the device is suitable, pins the
 camera, enables the PAM integration (`pam-auth-update` on Debian/Ubuntu) and
-enrolls the invoking user. Enrollment takes ~15 seconds: look at the camera,
-turn your head slightly, close your eyes when asked, then **blink slowly** once to
-verify.
+enrolls the invoking user. Enrollment takes 15–30 seconds: look at the
+camera, turn your head slightly to both sides, close your eyes for about two
+seconds when asked, then **blink slowly** once to verify. Each step waits
+until the camera has seen it and repeats the prompt if necessary.
 
 Many IR cameras need their emitter switched on via a UVC extension unit. If
 the image is dark, configure it with

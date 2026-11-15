@@ -22,20 +22,34 @@ use std::time::{Duration, Instant};
 // only ~1.2 s for three matching frames.
 const FULL_INTERVAL: Duration = Duration::from_millis(400);
 const MAX_SAMPLES: usize = 40;
-/// Enrollment phases (time based so people can follow the prompts).
-const STRAIGHT_PHASE: Duration = Duration::from_millis(2500);
-const TURN_PHASE: Duration = Duration::from_millis(3500);
-const PHASE_LIMIT: Duration = Duration::from_secs(12);
+/// Enrollment is a sequence of steps that each wait for the requested
+/// behaviour (seen live in the camera image), with generous time limits.
 const SAMPLE_INTERVAL: Duration = Duration::from_millis(300);
-const MIN_ENROLL_SAMPLES: usize = 6;
+const FRONTAL_SAMPLES: usize = 6;
+const MAX_TURN_SAMPLES: usize = 8;
 const MAX_ENROLL_SAMPLES: usize = 20;
-/// Closed-eye phase: wait up to this long for closed eyes, then record them
-/// for CLOSED_RECORD.
-const CLOSE_WAIT_LIMIT: Duration = Duration::from_secs(7);
-const CLOSED_RECORD: Duration = Duration::from_millis(1000);
+/// Give up looking for a face after this long.
+const STEP_LIMIT: Duration = Duration::from_secs(20);
+/// Hint "no face in view" after this long without a usable face.
+const NO_FACE_HINT: Duration = Duration::from_secs(3);
+/// Head turn: relative yaw (nose offset / eye distance, against the
+/// straight-ahead baseline) that counts as turned to one side.
+const TURN_YAW: f32 = 0.08;
+const TURN_LIMIT: Duration = Duration::from_secs(15);
+/// Ask for the other side after one side was seen for this long.
+const OTHER_SIDE_HINT: Duration = Duration::from_secs(3);
+/// Closed eyes: each try waits this long, then the prompt is repeated.
+const CLOSE_TRY: Duration = Duration::from_secs(6);
+const CLOSE_TRIES: usize = 3;
+const CLOSED_RECORD: Duration = Duration::from_millis(800);
+const MIN_CLOSED: usize = 3;
+/// After "open your eyes": wait at most this long for open eyes.
+const OPEN_WAIT: Duration = Duration::from_secs(5);
 /// How far below the least similar open-eye sample a frame must be to count
 /// as closed eyes.
 const CLOSED_MARGIN: f32 = 0.05;
+/// Verification attempts at the end of enrollment.
+const VERIFY_TRIES: usize = 2;
 /// V4L2 buffers queued by the camera (see Camera::open).
 const CAMERA_BUFFERS: usize = 4;
 /// Analyses without any face before `auth.no_face_timeout_secs` may end an
@@ -444,40 +458,99 @@ impl Engine {
             emit(tr(lang, "enroll.rgb_warning", &[]));
         }
 
-        // Phase 1: open-eye samples, first looking straight, then turning the
-        // head slightly. Time based, so the person has time to follow the
-        // instructions regardless of the camera frame rate.
         let mut strobe = StrobeFilter::default();
         let mut multi = 0u32;
-        let mut samples: Vec<Analysis> = Vec::new();
-        emit(tr(lang, "enroll.start", &[("user", user)]));
-        for (phase, duration) in [(0, STRAIGHT_PHASE), (1, TURN_PHASE)] {
-            if phase == 1 {
-                emit(tr(lang, "enroll.turn", &[]));
-            }
-            flush(&mut cam);
-            let start = Instant::now();
-            let mut last_kept = start - SAMPLE_INTERVAL;
-            let mut kept = 0;
-            // Keep going past `duration` until the phase has a few samples
-            // (face briefly lost), but never longer than PHASE_LIMIT.
-            while (start.elapsed() < duration || kept < 3) && start.elapsed() < PHASE_LIMIT {
-                let Some(a) = self.enroll_frame(&mut cam, infrared, &mut strobe, &mut multi) else {
-                    if multi == 5 {
-                        emit(tr(lang, "enroll.multiple_faces", &[]));
+        let mut hinted_no_face = false;
+        let mut hinted_multi = false;
+        // Next usable frame, or None when `limit` has passed. Emits a hint
+        // when no face was seen for a while.
+        let mut next = |cam: &mut Camera, since: Instant, limit: Duration, emit: Emit| -> Option<Analysis> {
+            let last_face = Instant::now();
+            while since.elapsed() < limit {
+                match self.enroll_frame(cam, infrared, &mut strobe, &mut multi) {
+                    Some(a) => return Some(a),
+                    None => {
+                        if !hinted_multi && multi >= 5 {
+                            hinted_multi = true;
+                            emit(tr(lang, "enroll.multiple_faces", &[]));
+                        }
+                        if !hinted_no_face && last_face.elapsed() >= NO_FACE_HINT {
+                            hinted_no_face = true;
+                            emit(tr(lang, "enroll.searching", &[]));
+                        }
                     }
-                    continue;
-                };
-                if last_kept.elapsed() >= SAMPLE_INTERVAL && samples.len() < MAX_ENROLL_SAMPLES {
-                    samples.push(a);
-                    last_kept = Instant::now();
-                    kept += 1;
                 }
             }
+            None
+        };
+
+        // Step 1: looking straight ahead – open-eye references and the
+        // baseline head pose.
+        emit(tr(lang, "enroll.start", &[("user", user)]));
+        flush(&mut cam);
+        let step = Instant::now();
+        let mut frontal: Vec<Analysis> = Vec::new();
+        let mut last_kept = step - SAMPLE_INTERVAL;
+        while frontal.len() < FRONTAL_SAMPLES {
+            let Some(a) = next(&mut cam, step, STEP_LIMIT, emit) else {
+                return Outcome::Failure(tr(lang, "enroll.no_face", &[]));
+            };
+            if last_kept.elapsed() >= SAMPLE_INTERVAL {
+                frontal.push(a);
+                last_kept = Instant::now();
+            }
         }
-        if samples.len() < MIN_ENROLL_SAMPLES {
+        let base_yaw = median(frontal.iter().map(|a| yaw(&a.face)).collect());
+        frontal.retain(|a| (yaw(&a.face) - base_yaw).abs() < TURN_YAW);
+
+        // Step 2: turn the head to both sides (better recognition at an
+        // angle). Optional: after TURN_LIMIT enrollment continues anyway.
+        emit(tr(lang, "enroll.turn", &[]));
+        flush(&mut cam);
+        let step = Instant::now();
+        let mut turned: Vec<Analysis> = Vec::new();
+        let (mut left, mut right): (Option<Instant>, Option<Instant>) = (None, None);
+        let mut hinted_other = false;
+        let mut last_kept = step - SAMPLE_INTERVAL;
+        while !(left.is_some() && right.is_some()) {
+            let Some(a) = next(&mut cam, step, TURN_LIMIT, emit) else {
+                break;
+            };
+            let d = yaw(&a.face) - base_yaw;
+            if d <= -TURN_YAW {
+                left.get_or_insert_with(Instant::now);
+            } else if d >= TURN_YAW {
+                right.get_or_insert_with(Instant::now);
+            }
+            let one_side = left.xor(right);
+            if !hinted_other && one_side.is_some_and(|t| t.elapsed() >= OTHER_SIDE_HINT) {
+                hinted_other = true;
+                emit(tr(lang, "enroll.turn_other", &[]));
+            }
+            if d.abs() >= TURN_YAW / 2.0
+                && last_kept.elapsed() >= SAMPLE_INTERVAL
+                && turned.len() < MAX_TURN_SAMPLES
+            {
+                turned.push(a);
+                last_kept = Instant::now();
+            }
+        }
+        log::info!(
+            "enrollment of {user}: {} frontal samples, {} turned samples (left {}, right {})",
+            frontal.len(),
+            turned.len(),
+            left.is_some(),
+            right.is_some()
+        );
+        if frontal.len() < 3 {
             return Outcome::Failure(tr(lang, "enroll.no_face", &[]));
         }
+        let samples: Vec<Analysis> = frontal
+            .iter()
+            .chain(turned.iter())
+            .take(MAX_ENROLL_SAMPLES)
+            .cloned()
+            .collect();
         // Consistency: every sample must resemble the others (one person).
         let mean = mean_embedding(&samples);
         let worst = samples
@@ -488,10 +561,10 @@ impl Engine {
             return Outcome::Failure(tr(lang, "enroll.inconsistent", &[]));
         }
 
-        // Phase 2: closed-eye references for the blink challenge. Wait until
-        // the eyes are actually closed, record them for a moment, then ask
-        // to open them again.
-        let open_eyes: Vec<EyePair> = samples.iter().map(|s| s.eyes.clone()).collect();
+        // Step 3: closed eyes, looking straight ahead. The open-eye
+        // reference comes from the frontal samples only: eye patches of a
+        // turned head differ too much and would hide closed eyes.
+        let open_eyes: Vec<EyePair> = frontal.iter().map(|s| s.eyes.clone()).collect();
         let open_ref = EyePair {
             left: average(&open_eyes.iter().map(|e| e.left.as_slice()).collect::<Vec<_>>()),
             right: average(&open_eyes.iter().map(|e| e.right.as_slice()).collect::<Vec<_>>()),
@@ -499,36 +572,62 @@ impl Engine {
         let eye_sim = |e: &EyePair| dot(&e.left, &open_ref.left).min(dot(&e.right, &open_ref.right));
         let open_floor = open_eyes.iter().map(eye_sim).fold(f32::INFINITY, f32::min);
         let closed_below = open_floor - CLOSED_MARGIN;
-        emit(tr(lang, "enroll.close_eyes", &[]));
-        flush(&mut cam);
-        let phase = Instant::now();
-        let mut closed_since: Option<Instant> = None;
-        let mut closed: Vec<(f32, EyePair)> = Vec::new();
-        while phase.elapsed() < CLOSE_WAIT_LIMIT {
-            if closed_since.is_some_and(|t| t.elapsed() >= CLOSED_RECORD) && closed.len() >= 3 {
+        let usable = |a: &Analysis| {
+            vision::cosine(&a.embedding, &mean) >= 0.5 && (yaw(&a.face) - base_yaw).abs() < TURN_YAW
+        };
+        let mut closed: Vec<EyePair> = Vec::new();
+        let mut lowest = f32::INFINITY;
+        for attempt in 0..CLOSE_TRIES {
+            emit(tr(
+                lang,
+                if attempt == 0 {
+                    "enroll.close_eyes"
+                } else {
+                    "enroll.close_again"
+                },
+                &[],
+            ));
+            flush(&mut cam);
+            closed.clear();
+            let step = Instant::now();
+            let mut closed_since: Option<Instant> = None;
+            while let Some(a) = next(&mut cam, step, CLOSE_TRY, emit) {
+                if !usable(&a) {
+                    continue;
+                }
+                let sim = eye_sim(&a.eyes);
+                lowest = lowest.min(sim);
+                if sim < closed_below {
+                    closed_since.get_or_insert_with(Instant::now);
+                    closed.push(a.eyes);
+                } else if sim >= open_floor && closed.len() >= MIN_CLOSED {
+                    break; // eyes opened again after enough closed frames
+                }
+                if closed_since.is_some_and(|t| t.elapsed() >= CLOSED_RECORD) && closed.len() >= MIN_CLOSED {
+                    break;
+                }
+            }
+            if closed.len() >= MIN_CLOSED {
                 break;
             }
-            // Only lit frames of the same single person: emitter-off frames
-            // would otherwise end up as "closed eye" references (noise).
-            let Some(a) = self.enroll_frame(&mut cam, infrared, &mut strobe, &mut multi) else {
-                continue;
-            };
-            if vision::cosine(&a.embedding, &mean) < 0.5 {
-                continue;
-            }
-            let sim = eye_sim(&a.eyes);
-            if sim < closed_below {
-                closed_since.get_or_insert_with(Instant::now);
-                closed.push((sim, a.eyes));
-            }
         }
-        emit(tr(lang, "enroll.open_eyes", &[]));
         log::info!(
-            "enrollment of {user}: {} open samples, {} closed samples (open floor {open_floor:.3})",
-            samples.len(),
+            "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
+             {closed_below:.3}, lowest {lowest:.3})",
             closed.len()
         );
-        let closed: Vec<EyePair> = closed.into_iter().map(|(_, e)| e).collect();
+        if closed.len() < MIN_CLOSED {
+            return Outcome::Failure(tr(lang, "enroll.calibration_failed", &[]));
+        }
+        // Step 4: open the eyes again; wait until they are (so the
+        // verification does not start with closed eyes).
+        emit(tr(lang, "enroll.open_eyes", &[]));
+        let step = Instant::now();
+        while let Some(a) = next(&mut cam, step, OPEN_WAIT, emit) {
+            if usable(&a) && eye_sim(&a.eyes) >= open_floor {
+                break;
+            }
+        }
         let eyes = EyeCalibration::from_samples(&open_eyes, &closed);
         if eyes.is_none() && (self.cfg.effective_liveness() == LivenessMode::Blink || !infrared) {
             return Outcome::Failure(tr(lang, "enroll.calibration_failed", &[]));
@@ -560,23 +659,28 @@ impl Engine {
         template.samples.drain(..excess);
         drop(cam);
 
-        // Phase 3: verify the fresh template with the real challenge.
+        // Step 5: verify the fresh template with the real challenge.
         std::thread::sleep(Duration::from_millis(500));
         emit(tr(lang, "enroll.verify", &[]));
         let timeout = Duration::from_secs_f32(self.cfg.auth.timeout_secs);
-        match self.attempt(&template, timeout, lang, emit) {
-            Ok(r) if r.success => {}
-            Ok(r) => {
-                let why = tr(
-                    lang,
-                    r.reason.unwrap_or(FailReason::NotRecognized).message_key(),
-                    &[],
-                );
-                return Outcome::Failure(format!("{} {why}", tr(lang, "enroll.verify_failed", &[])));
-            }
-            Err(e) => {
-                log::warn!("verification failed: {e:#}");
-                return Outcome::Unavailable(tr(lang, "auth.camera_unavailable", &[]));
+        for attempt in 1..=VERIFY_TRIES {
+            match self.attempt(&template, timeout, lang, emit) {
+                Ok(r) if r.success => break,
+                Ok(r) if attempt < VERIFY_TRIES && r.reason == Some(FailReason::NoBlink) => {
+                    emit(tr(lang, "enroll.verify_retry", &[]));
+                }
+                Ok(r) => {
+                    let why = tr(
+                        lang,
+                        r.reason.unwrap_or(FailReason::NotRecognized).message_key(),
+                        &[],
+                    );
+                    return Outcome::Failure(format!("{} {why}", tr(lang, "enroll.verify_failed", &[])));
+                }
+                Err(e) => {
+                    log::warn!("verification failed: {e:#}");
+                    return Outcome::Unavailable(tr(lang, "auth.camera_unavailable", &[]));
+                }
             }
         }
         if let Err(e) = self.store.save(&template) {
@@ -602,6 +706,22 @@ pub fn kind_name(k: CameraKind) -> &'static str {
     }
 }
 
+/// Horizontal head pose: nose offset from the midpoint of the eyes, relative
+/// to the eye distance. About 0 looking straight at the camera; the sign
+/// depends on the side. Only compared against the person's own baseline.
+fn yaw(f: &vision::detect::Face) -> f32 {
+    let [a, b, nose] = [f.landmarks[0], f.landmarks[1], f.landmarks[2]];
+    (nose[0] - (a[0] + b[0]) / 2.0) / f.interocular().max(1.0)
+}
+
+fn median(mut v: Vec<f32>) -> f32 {
+    if v.is_empty() {
+        return 0.0;
+    }
+    v.sort_by(f32::total_cmp);
+    v[v.len() / 2]
+}
+
 /// Discard frames the driver queued while we were not reading (e.g. during a
 /// prompt), so the next frame shows the present.
 fn flush(cam: &mut Camera) {
@@ -623,4 +743,43 @@ fn mean_embedding(s: &[Analysis]) -> Vec<f32> {
     }
     vision::embed::normalize(&mut m);
     m
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::vision::detect::Face;
+
+    fn face(nose_x: f32) -> Face {
+        Face {
+            x: 0.0,
+            y: 0.0,
+            w: 100.0,
+            h: 100.0,
+            score: 1.0,
+            landmarks: [
+                [30.0, 40.0],
+                [70.0, 40.0],
+                [nose_x, 60.0],
+                [35.0, 80.0],
+                [65.0, 80.0],
+            ],
+        }
+    }
+
+    #[test]
+    fn yaw_is_relative_nose_offset() {
+        assert!(yaw(&face(50.0)).abs() < 1e-6);
+        assert!((yaw(&face(58.0)) - 0.2).abs() < 1e-6);
+        assert!((yaw(&face(42.0)) + 0.2).abs() < 1e-6);
+        // A moderate head turn clearly exceeds the turn threshold.
+        assert!(yaw(&face(54.0)) >= TURN_YAW);
+    }
+
+    #[test]
+    fn median_of_values() {
+        assert_eq!(median(vec![]), 0.0);
+        assert_eq!(median(vec![3.0, 1.0, 2.0]), 2.0);
+        assert_eq!(median(vec![0.1, -0.4, 0.05, 0.0]), 0.05);
+    }
 }
