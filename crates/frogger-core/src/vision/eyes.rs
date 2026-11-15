@@ -158,6 +158,13 @@ impl EyeCalibration {
         }
         // Require each frame to be clearly on one side: a third of the gap.
         cal.margin = (gap / 3.0).clamp(0.03, 0.25);
+        log::info!(
+            "eye calibration: open {min_open:.3}, closed {max_closed:.3}, gap {gap:.3}, margin {:.3} \
+             ({} open, {} closed samples)",
+            cal.margin,
+            open.len(),
+            closed.len()
+        );
         Some(cal)
     }
 

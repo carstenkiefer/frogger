@@ -26,7 +26,9 @@ const MAX_SAMPLES: usize = 40;
 /// Enrollment is a sequence of steps that each wait for the requested
 /// behaviour (seen live in the camera image), with generous time limits.
 const SAMPLE_INTERVAL: Duration = Duration::from_millis(300);
-const FRONTAL_SAMPLES: usize = 6;
+const FRONTAL_SAMPLES: usize = 8;
+/// Time to read the first prompt before open-eye samples are taken.
+const START_GRACE: Duration = Duration::from_millis(1200);
 const MAX_TURN_SAMPLES: usize = 8;
 const MAX_ENROLL_SAMPLES: usize = 20;
 /// Give up looking for a face after this long.
@@ -204,7 +206,24 @@ impl Engine {
         emit: Emit,
     ) -> Result<AttemptReport> {
         let start = Instant::now();
-        let (mut cam, mut kind) = self.open_camera()?;
+        let (mut cam, kind) = self.open_camera()?;
+        self.attempt_on(&mut cam, kind, start, template, timeout, lang, emit)
+    }
+
+    /// Recognition attempt on an already open camera (enrollment verifies
+    /// with the camera it enrolled with, so exposure stays the same).
+    #[allow(clippy::too_many_arguments)]
+    fn attempt_on(
+        &self,
+        cam: &mut Camera,
+        kind: CameraKind,
+        start: Instant,
+        template: &UserTemplate,
+        timeout: Duration,
+        lang: &str,
+        emit: Emit,
+    ) -> Result<AttemptReport> {
+        let mut kind = kind;
         // Wait for a background model load only after the camera started.
         let models = self.models()?;
         let infrared = template.camera_kind == "infrared";
@@ -212,7 +231,7 @@ impl Engine {
             kind = CameraKind::Infrared; // verified per frame via chroma
         }
         let ir = infrared && kind != CameraKind::Rgb;
-        let depth = self.open_depth(&cam)?;
+        let depth = self.open_depth(cam)?;
         let mut verifier = Verifier::new(&self.cfg, template, ir);
         let mut strobe = StrobeFilter::default();
         // Nobody in front of the camera (looking away, walked off, another
@@ -525,6 +544,11 @@ impl Engine {
             let Some(a) = next(&mut cam, step, STEP_LIMIT, emit) else {
                 return Outcome::Failure(tr(lang, "enroll.no_face", &[]));
             };
+            // The person is still reading the prompt (looking at the text,
+            // not the camera): those eyes would make a poor reference.
+            if step.elapsed() < START_GRACE {
+                continue;
+            }
             if last_kept.elapsed() >= SAMPLE_INTERVAL {
                 frontal.push(a);
                 last_kept = Instant::now();
@@ -532,6 +556,10 @@ impl Engine {
         }
         cue(Cue::Step);
         let base_yaw = median(frontal.iter().map(|a| yaw(&a.face)).collect());
+        log::info!(
+            "enrollment of {user}: frontal face brightness {:.0}",
+            median(frontal.iter().map(|a| a.face_brightness).collect())
+        );
         frontal.retain(|a| (yaw(&a.face) - base_yaw).abs() < TURN_YAW);
 
         // Step 2: turn the head to both sides (better recognition at an
@@ -718,14 +746,14 @@ impl Engine {
         }));
         let excess = template.samples.len().saturating_sub(MAX_SAMPLES);
         template.samples.drain(..excess);
-        drop(cam);
 
         // Step 5: verify the fresh template with the real challenge.
         std::thread::sleep(Duration::from_millis(500));
         emit(tr(lang, "enroll.verify", &[]));
         let timeout = Duration::from_secs_f32(self.cfg.auth.timeout_secs);
         for attempt in 1..=VERIFY_TRIES {
-            match self.attempt(&template, timeout, lang, emit) {
+            flush(&mut cam);
+            match self.attempt_on(&mut cam, kind, Instant::now(), &template, timeout, lang, emit) {
                 Ok(r) if r.success => break,
                 Ok(r) if attempt < VERIFY_TRIES && r.reason == Some(FailReason::NoBlink) => {
                     emit(tr(lang, "enroll.verify_retry", &[]));

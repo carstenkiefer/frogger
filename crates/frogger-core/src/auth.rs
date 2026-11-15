@@ -412,6 +412,17 @@ impl<'a> Verifier<'a> {
         };
         let recovered = |r: &EyeComponents| (0..2).all(|i| score(r[i]) - score(cur[i]) <= dip / 2.0);
 
+        log::debug!(
+            "eyes t={t:.2} score L {:.3} R {:.3} (open L {:.3} R {:.3}, closed L {:.3} R {:.3}) sim {sim:.3} \
+             margin {margin:.3} dip {dip:.3} state {:?}",
+            score(cur[0]),
+            score(cur[1]),
+            cur[0].0,
+            cur[1].0,
+            cur[0].1,
+            cur[1].1,
+            self.blink
+        );
         self.blink = match self.blink {
             Blink::Done => Blink::Done,
             Blink::NeedOpen if open_now && sim >= threshold => Blink::Open { reference: cur },
