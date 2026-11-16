@@ -26,7 +26,9 @@ const MAX_SAMPLES: usize = 40;
 /// Enrollment is a sequence of steps that each wait for the requested
 /// behaviour (seen live in the camera image), with generous time limits.
 const SAMPLE_INTERVAL: Duration = Duration::from_millis(300);
-const FRONTAL_SAMPLES: usize = 6;
+const FRONTAL_SAMPLES: usize = 8;
+/// Time to read the first prompt before open-eye samples are taken.
+const START_GRACE: Duration = Duration::from_millis(1200);
 const MAX_TURN_SAMPLES: usize = 8;
 const MAX_ENROLL_SAMPLES: usize = 20;
 /// Give up looking for a face after this long.
@@ -42,16 +44,23 @@ const OTHER_SIDE_HINT: Duration = Duration::from_secs(3);
 /// Closed eyes: each try waits this long, then the prompt is repeated.
 const CLOSE_TRY: Duration = Duration::from_secs(6);
 const CLOSE_TRIES: usize = 3;
-const CLOSED_RECORD: Duration = Duration::from_millis(800);
-const MIN_CLOSED: usize = 3;
+/// Reaction time after the prompt: frames in this window are ignored.
+const CLOSE_GRACE: Duration = Duration::from_millis(500);
+const CLOSED_RECORD: Duration = Duration::from_millis(1000);
+const MIN_CLOSED: usize = 4;
 /// After "open your eyes": wait at most this long for open eyes.
 const OPEN_WAIT: Duration = Duration::from_secs(5);
-/// How far below the least similar open-eye sample a frame must be to count
-/// as closed eyes.
-const CLOSED_MARGIN: f32 = 0.05;
+/// How far below the typical open-eye similarity *both* eyes must drop for a
+/// frame to count as closed. Field test: open eyes ~0.85-0.94 with noise of
+/// a few hundredths, closed eyes 0.35-0.68.
+const CLOSED_MARGIN: f32 = 0.15;
 /// Identity check while the eyes are closed (embedding cosine to the open
 /// samples; closed eyes lower it, the multiple-faces check still applies).
 const CLOSED_MIN_IDENTITY: f32 = 0.35;
+/// Head pose tolerance with closed eyes: the detector places the landmarks
+/// of closed eyes less precisely, which shifts the yaw estimate (field test:
+/// 63 of 82 closed-eye frames rejected at 0.12).
+const CLOSED_MAX_YAW: f32 = 0.25;
 /// Verification attempts at the end of enrollment.
 const VERIFY_TRIES: usize = 2;
 /// V4L2 buffers queued by the camera (see Camera::open).
@@ -201,7 +210,24 @@ impl Engine {
         emit: Emit,
     ) -> Result<AttemptReport> {
         let start = Instant::now();
-        let (mut cam, mut kind) = self.open_camera()?;
+        let (mut cam, kind) = self.open_camera()?;
+        self.attempt_on(&mut cam, kind, start, template, timeout, lang, emit)
+    }
+
+    /// Recognition attempt on an already open camera (enrollment verifies
+    /// with the camera it enrolled with, so exposure stays the same).
+    #[allow(clippy::too_many_arguments)]
+    fn attempt_on(
+        &self,
+        cam: &mut Camera,
+        kind: CameraKind,
+        start: Instant,
+        template: &UserTemplate,
+        timeout: Duration,
+        lang: &str,
+        emit: Emit,
+    ) -> Result<AttemptReport> {
+        let mut kind = kind;
         // Wait for a background model load only after the camera started.
         let models = self.models()?;
         let infrared = template.camera_kind == "infrared";
@@ -209,7 +235,7 @@ impl Engine {
             kind = CameraKind::Infrared; // verified per frame via chroma
         }
         let ir = infrared && kind != CameraKind::Rgb;
-        let depth = self.open_depth(&cam)?;
+        let depth = self.open_depth(cam)?;
         let mut verifier = Verifier::new(&self.cfg, template, ir);
         let mut strobe = StrobeFilter::default();
         // Nobody in front of the camera (looking away, walked off, another
@@ -395,27 +421,36 @@ impl Engine {
     }
 
     /// Next frame usable for enrollment: lit by the emitter, exactly one face,
-    /// large and bright enough. `multi` counts frames with several faces.
+    /// large and bright enough. Rejected frames are counted in `rejects`.
     fn enroll_frame(
         &self,
         cam: &mut Camera,
         infrared: bool,
         strobe: &mut StrobeFilter,
-        multi: &mut u32,
+        rejects: &mut Rejects,
     ) -> Option<Analysis> {
-        let frame = cam.frame().ok()?;
+        let Ok(frame) = cam.frame() else {
+            rejects.capture += 1;
+            return None;
+        };
         if infrared && (frame.chroma >= 2.0 || strobe.is_off(frame.mean)) {
+            rejects.unlit += 1;
             return None;
         }
-        let a = self.models().ok()?.pipeline.analyse(&frame.image).ok()??;
+        let Some(a) = self.models().ok()?.pipeline.analyse(&frame.image).ok().flatten() else {
+            rejects.no_face += 1;
+            return None;
+        };
         if a.face_count > 1 {
-            *multi += 1;
+            rejects.multiple += 1;
             return None;
         }
         if a.face.interocular() < 28.0 {
+            rejects.too_small += 1;
             return None; // too far away / too small for reliable features
         }
         if infrared && a.face_brightness < self.cfg.liveness.min_ir_face_brightness {
+            rejects.dark += 1;
             return None;
         }
         Some(a)
@@ -483,21 +518,22 @@ impl Engine {
         }
 
         let mut strobe = StrobeFilter::default();
-        let mut multi = 0u32;
+        let mut rejects = Rejects::default();
         let mut hinted_no_face = false;
         let mut hinted_multi = false;
-        // Frames without a usable face (diagnostics).
-        let skipped = std::cell::Cell::new(0u32);
+        // Frames without a usable face, by reason (diagnostics).
+        let rejected = std::cell::Cell::new(Rejects::default());
         // Next usable frame, or None when `limit` has passed. Emits a hint
         // when no face was seen for a while.
         let mut next = |cam: &mut Camera, since: Instant, limit: Duration, emit: Emit| -> Option<Analysis> {
             let last_face = Instant::now();
             while since.elapsed() < limit {
-                match self.enroll_frame(cam, infrared, &mut strobe, &mut multi) {
+                let r = self.enroll_frame(cam, infrared, &mut strobe, &mut rejects);
+                rejected.set(rejects);
+                match r {
                     Some(a) => return Some(a),
                     None => {
-                        skipped.set(skipped.get() + 1);
-                        if !hinted_multi && multi >= 5 {
+                        if !hinted_multi && rejects.multiple >= 5 {
                             hinted_multi = true;
                             emit(tr(lang, "enroll.multiple_faces", &[]));
                         }
@@ -522,6 +558,11 @@ impl Engine {
             let Some(a) = next(&mut cam, step, STEP_LIMIT, emit) else {
                 return Outcome::Failure(tr(lang, "enroll.no_face", &[]));
             };
+            // The person is still reading the prompt (looking at the text,
+            // not the camera): those eyes would make a poor reference.
+            if step.elapsed() < START_GRACE {
+                continue;
+            }
             if last_kept.elapsed() >= SAMPLE_INTERVAL {
                 frontal.push(a);
                 last_kept = Instant::now();
@@ -529,6 +570,10 @@ impl Engine {
         }
         cue(Cue::Step);
         let base_yaw = median(frontal.iter().map(|a| yaw(&a.face)).collect());
+        log::info!(
+            "enrollment of {user}: frontal face brightness {:.0}",
+            median(frontal.iter().map(|a| a.face_brightness).collect())
+        );
         frontal.retain(|a| (yaw(&a.face) - base_yaw).abs() < TURN_YAW);
 
         // Step 2: turn the head to both sides (better recognition at an
@@ -565,11 +610,13 @@ impl Engine {
         }
         cue(Cue::Step);
         log::info!(
-            "enrollment of {user}: {} frontal samples, {} turned samples (left {}, right {})",
+            "enrollment of {user}: {} frontal samples, {} turned samples (left {}, right {}); \
+             frames without usable face so far {:?}",
             frontal.len(),
             turned.len(),
             left.is_some(),
-            right.is_some()
+            right.is_some(),
+            rejected.get()
         );
         if frontal.len() < 3 {
             return Outcome::Failure(tr(lang, "enroll.no_face", &[]));
@@ -598,7 +645,10 @@ impl Engine {
             left: average(&open_eyes.iter().map(|e| e.left.as_slice()).collect::<Vec<_>>()),
             right: average(&open_eyes.iter().map(|e| e.right.as_slice()).collect::<Vec<_>>()),
         };
+        // Weaker eye (both must look open) and stronger eye (both must look
+        // closed): a single noisy eye patch is neither open nor closed.
         let eye_sim = |e: &EyePair| dot(&e.left, &open_ref.left).min(dot(&e.right, &open_ref.right));
+        let both_sim = |e: &EyePair| dot(&e.left, &open_ref.left).max(dot(&e.right, &open_ref.right));
         // A low quantile instead of the minimum: a single blurred or
         // misaligned sample must not drag the threshold down (field test:
         // the minimum fell to -0.2, which closed eyes never reach).
@@ -609,12 +659,12 @@ impl Engine {
         // closed: looser identity and pose limits than for open eyes.
         let usable = |a: &Analysis| {
             vision::cosine(&a.embedding, &mean) >= CLOSED_MIN_IDENTITY
-                && (yaw(&a.face) - base_yaw).abs() < TURN_YAW * 1.5
+                && (yaw(&a.face) - base_yaw).abs() < CLOSED_MAX_YAW
         };
         let mut closed: Vec<(f32, EyePair)> = Vec::new();
         let mut lowest = f32::INFINITY;
         let (mut seen, mut other_person, mut turned_away) = (0u32, 0u32, 0u32);
-        let skipped_before = skipped.get();
+        let rejected_before = rejected.get();
         for attempt in 0..CLOSE_TRIES {
             emit(tr(
                 lang,
@@ -630,6 +680,9 @@ impl Engine {
             let step = Instant::now();
             let mut closed_since: Option<Instant> = None;
             while let Some(a) = next(&mut cam, step, CLOSE_TRY, emit) {
+                if step.elapsed() < CLOSE_GRACE {
+                    continue;
+                }
                 seen += 1;
                 if vision::cosine(&a.embedding, &mean) < CLOSED_MIN_IDENTITY {
                     other_person += 1;
@@ -639,12 +692,12 @@ impl Engine {
                     turned_away += 1;
                     continue;
                 }
-                let sim = eye_sim(&a.eyes);
+                let sim = both_sim(&a.eyes);
                 lowest = lowest.min(sim);
                 if sim < closed_below {
                     closed_since.get_or_insert_with(Instant::now);
                     closed.push((sim, a.eyes));
-                } else if sim >= open_floor && closed.len() >= MIN_CLOSED {
+                } else if eye_sim(&a.eyes) >= open_floor && closed.len() >= MIN_CLOSED {
                     break; // eyes opened again after enough closed frames
                 }
                 if closed_since.is_some_and(|t| t.elapsed() >= CLOSED_RECORD) && closed.len() >= MIN_CLOSED {
@@ -657,10 +710,10 @@ impl Engine {
         }
         log::info!(
             "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
-             {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {}, \
+             {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {:?}, \
              other identity {other_person}, head turned {turned_away})",
             closed.len(),
-            skipped.get() - skipped_before
+            rejected.get().since(&rejected_before)
         );
         // Only the clearest closed frames become the reference: frames taken
         // while the lids were still moving would blur it.
@@ -709,14 +762,14 @@ impl Engine {
         }));
         let excess = template.samples.len().saturating_sub(MAX_SAMPLES);
         template.samples.drain(..excess);
-        drop(cam);
 
         // Step 5: verify the fresh template with the real challenge.
         std::thread::sleep(Duration::from_millis(500));
         emit(tr(lang, "enroll.verify", &[]));
         let timeout = Duration::from_secs_f32(self.cfg.auth.timeout_secs);
         for attempt in 1..=VERIFY_TRIES {
-            match self.attempt(&template, timeout, lang, emit) {
+            flush(&mut cam);
+            match self.attempt_on(&mut cam, kind, Instant::now(), &template, timeout, lang, emit) {
                 Ok(r) if r.success => break,
                 Ok(r) if attempt < VERIFY_TRIES && r.reason == Some(FailReason::NoBlink) => {
                     emit(tr(lang, "enroll.verify_retry", &[]));
@@ -755,6 +808,30 @@ pub fn kind_name(k: CameraKind) -> &'static str {
     match k {
         CameraKind::Infrared => "infrared",
         CameraKind::Rgb | CameraKind::Unknown => "rgb",
+    }
+}
+
+/// Why frames were not usable during enrollment (diagnostics).
+#[derive(Clone, Copy, Debug, Default)]
+struct Rejects {
+    capture: u32,
+    unlit: u32,
+    no_face: u32,
+    multiple: u32,
+    too_small: u32,
+    dark: u32,
+}
+
+impl Rejects {
+    fn since(&self, before: &Rejects) -> Rejects {
+        Rejects {
+            capture: self.capture - before.capture,
+            unlit: self.unlit - before.unlit,
+            no_face: self.no_face - before.no_face,
+            multiple: self.multiple - before.multiple,
+            too_small: self.too_small - before.too_small,
+            dark: self.dark - before.dark,
+        }
     }
 }
 

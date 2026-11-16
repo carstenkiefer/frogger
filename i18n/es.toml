@@ -29,7 +29,7 @@
 "enroll.no_face" = "No se ha encontrado ningún rostro utilizable. Compruebe la iluminación y la distancia a la cámara."
 "enroll.multiple_faces" = "Solo puede haber una persona delante de la cámara."
 "enroll.inconsistent" = "Las muestras grabadas no pertenecen a la misma persona. Inténtelo de nuevo."
-"enroll.calibration_failed" = "No se han podido distinguir los ojos abiertos de los cerrados. Quítese las gafas con reflejos fuertes e inténtelo de nuevo."
+"enroll.calibration_failed" = "No se pudieron registrar de forma fiable los ojos cerrados. Inténtelo de nuevo: mire de frente a la cámara y mantenga los ojos cerrados hasta oír el tono. Unas gafas con reflejos fuertes también pueden ser la causa."
 "enroll.rgb_refused" = "No se ha encontrado ninguna cámara infrarroja. El inicio de sesión facial sin IR puede engañarse con una foto y está desactivado por la política (policy.allow_insecure_rgb)."
 "enroll.rgb_needs_ack" = "No se ha encontrado ninguna cámara infrarroja. El registro requiere la confirmación explícita --accept-insecure-rgb."
 "enroll.rgb_warning" = "ADVERTENCIA: registro con una webcam normal. Una foto o un vídeo suyo podría desbloquear este dispositivo."

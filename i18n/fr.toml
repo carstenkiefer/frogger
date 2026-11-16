@@ -29,7 +29,7 @@
 "enroll.no_face" = "Aucun visage exploitable trouvé. Vérifiez l'éclairage et la distance à la caméra."
 "enroll.multiple_faces" = "Une seule personne doit se trouver devant la caméra."
 "enroll.inconsistent" = "Les échantillons enregistrés n'appartiennent pas à la même personne. Veuillez réessayer."
-"enroll.calibration_failed" = "Impossible de distinguer les yeux ouverts des yeux fermés. Retirez les lunettes à forts reflets et réessayez."
+"enroll.calibration_failed" = "Les yeux fermés n'ont pas pu être enregistrés de manière fiable. Réessayez : regardez la caméra bien en face et gardez les yeux fermés jusqu'au signal sonore. Des lunettes avec de forts reflets peuvent aussi en être la cause."
 "enroll.rgb_refused" = "Aucune caméra infrarouge trouvée. La connexion par visage sans IR peut être trompée avec une photo et est désactivée par la politique (policy.allow_insecure_rgb)."
 "enroll.rgb_needs_ack" = "Aucune caméra infrarouge trouvée. L'enregistrement exige la confirmation explicite --accept-insecure-rgb."
 "enroll.rgb_warning" = "ATTENTION : enregistrement avec une webcam ordinaire. Une photo ou une vidéo de vous peut déverrouiller cet appareil."

@@ -30,7 +30,7 @@
 "enroll.no_face" = "No usable face found. Check lighting and the distance to the camera."
 "enroll.multiple_faces" = "Only one person may be in front of the camera."
 "enroll.inconsistent" = "The recorded samples do not belong to the same person. Please try again."
-"enroll.calibration_failed" = "Open and closed eyes could not be told apart. Remove glasses with strong reflections and try again."
+"enroll.calibration_failed" = "Closed eyes could not be recorded reliably. Please try again: look straight at the camera and keep your eyes closed until you hear the tone. Glasses with strong reflections can also cause this."
 "enroll.rgb_refused" = "No infrared camera found. Face login without IR can be fooled with a photo and is disabled by policy (policy.allow_insecure_rgb)."
 "enroll.rgb_needs_ack" = "No infrared camera found. Enrollment requires the explicit acknowledgement --accept-insecure-rgb."
 "enroll.rgb_warning" = "WARNING: enrolling with a normal webcam. A photo or video of you may unlock this device."

@@ -29,7 +29,7 @@
 "enroll.no_face" = "Hakuna uso unaofaa uliopatikana. Angalia mwanga na umbali kutoka kwa kamera."
 "enroll.multiple_faces" = "Mtu mmoja tu anaruhusiwa kuwa mbele ya kamera."
 "enroll.inconsistent" = "Sampuli zilizorekodiwa si za mtu mmoja. Tafadhali jaribu tena."
-"enroll.calibration_failed" = "Haikuweza kutofautisha macho yaliyofunguliwa na yaliyofungwa. Ondoa miwani inayoakisi mwanga sana kisha ujaribu tena."
+"enroll.calibration_failed" = "Macho yaliyofungwa hayakuweza kurekodiwa kwa uhakika. Tafadhali jaribu tena: tazama kamera moja kwa moja na uweke macho yamefungwa hadi usikie mlio. Miwani yenye mng'ao mkali pia inaweza kuwa sababu."
 "enroll.rgb_refused" = "Hakuna kamera ya infrared iliyopatikana. Kuingia kwa uso bila IR kunaweza kudanganywa kwa picha na kumezimwa na sera (policy.allow_insecure_rgb)."
 "enroll.rgb_needs_ack" = "Hakuna kamera ya infrared iliyopatikana. Usajili unahitaji ukubali wa wazi --accept-insecure-rgb."
 "enroll.rgb_warning" = "ONYO: unasajili kwa kamera ya kawaida ya wavuti. Picha au video yako inaweza kufungua kifaa hiki."

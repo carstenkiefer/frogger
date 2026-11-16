@@ -29,7 +29,7 @@
 "enroll.no_face" = "Kein verwendbares Gesicht gefunden. Bitte Beleuchtung und Abstand zur Kamera prüfen."
 "enroll.multiple_faces" = "Es darf nur eine Person vor der Kamera sein."
 "enroll.inconsistent" = "Die aufgenommenen Proben gehören nicht zur selben Person. Bitte erneut versuchen."
-"enroll.calibration_failed" = "Offene und geschlossene Augen konnten nicht unterschieden werden. Brille mit starken Reflexionen abnehmen und erneut versuchen."
+"enroll.calibration_failed" = "Geschlossene Augen konnten nicht zuverlässig erfasst werden. Bitte erneut versuchen: gerade in die Kamera schauen und die Augen geschlossen halten, bis der Ton erklingt. Auch eine Brille mit starken Reflexionen kann die Ursache sein."
 "enroll.rgb_refused" = "Keine Infrarotkamera gefunden. Gesichtsanmeldung ohne IR lässt sich mit einem Foto täuschen und ist per Richtlinie deaktiviert (policy.allow_insecure_rgb)."
 "enroll.rgb_needs_ack" = "Keine Infrarotkamera gefunden. Das Einlernen erfordert die ausdrückliche Bestätigung --accept-insecure-rgb."
 "enroll.rgb_warning" = "WARNUNG: Einlernen mit einer normalen Webcam. Ein Foto oder Video von Ihnen kann dieses Gerät entsperren."
