@@ -62,6 +62,8 @@
 "cli.doctor.encryption_on" = "Usimbaji fiche wa data ya uso: umewashwa (TPM 2.0)"
 "cli.doctor.encryption_off" = "Usimbaji fiche wa data ya uso: haujawashwa (ruhusa za faili pekee)"
 "cli.doctor.encryption_unknown" = "Usimbaji wa data ya uso: ufunguo umewekwa (TPM 2.0); hali haijulikani wakati huduma haifanyi kazi"
+"cli.doctor.voice_on" = "Maelekezo ya sauti: kifurushi cha sauti kimesakinishwa"
+"cli.doctor.voice_hint" = "Maelekezo ya sauti: si lazima – sakinisha kifurushi frogger-voice-{lang} (github.com/carstenkiefer/frogger-voices); hadi hapo sauti za mfumo zinatumika"
 "cli.doctor.daemon_credentials" = "Huduma haiwezi kuanza: systemd haikuweza kusimbua ufunguo wa data ya uso (frogger.key, TPM). Maelezo: journalctl -u frogger -b"
 "cli.doctor.daemon_failed" = "Huduma imeshindwa kuanza ({result}). Maelezo: journalctl -u frogger -b"
 "cli.setup.camera" = "Kamera inayotumika: {device}"

@@ -63,6 +63,8 @@
 "cli.doctor.encryption_on" = "Guhisha amakuru y'isura (chiffrement): birakora (TPM 2.0)"
 "cli.doctor.encryption_off" = "Guhisha amakuru y'isura (chiffrement): ntibikora (uburenganzira bwa dosiye gusa)"
 "cli.doctor.encryption_unknown" = "Ihishwa ry'amakuru y'isura: urufunguzo rwashyizweho (TPM 2.0); imiterere ntizwi igihe serivisi idakora"
+"cli.doctor.voice_on" = "Amabwiriza avugwa: ipaki y'ijwi yashyizweho"
+"cli.doctor.voice_hint" = "Amabwiriza avugwa: si ngombwa – shyiraho ipaki frogger-voice-{lang} (github.com/carstenkiefer/frogger-voices); kugeza icyo gihe hakoreshwa amajwi ya sisitemu"
 "cli.doctor.daemon_credentials" = "Serivisi ntishobora gutangira: systemd ntiyashoboye gufungura urufunguzo rw'amakuru y'isura (frogger.key, TPM). Ibisobanuro: journalctl -u frogger -b"
 "cli.doctor.daemon_failed" = "Serivisi yananiwe gutangira ({result}). Ibisobanuro: journalctl -u frogger -b"
 "cli.setup.camera" = "Kamera ikoreshwa: {device}"

@@ -62,6 +62,8 @@
 "cli.doctor.encryption_on" = "Enkripsi data wajah: aktif (TPM 2.0)"
 "cli.doctor.encryption_off" = "Enkripsi data wajah: tidak aktif (hanya izin berkas)"
 "cli.doctor.encryption_unknown" = "Enkripsi data wajah: kunci sudah disiapkan (TPM 2.0); status tidak diketahui selama layanan tidak berjalan"
+"cli.doctor.voice_on" = "Petunjuk suara: paket suara terpasang"
+"cli.doctor.voice_hint" = "Petunjuk suara: opsional – pasang paket frogger-voice-{lang} (github.com/carstenkiefer/frogger-voices); sampai saat itu suara sistem digunakan"
 "cli.doctor.daemon_credentials" = "Layanan tidak dapat dimulai: systemd tidak dapat mendekripsi kunci data wajah (frogger.key, TPM). Detail: journalctl -u frogger -b"
 "cli.doctor.daemon_failed" = "Layanan gagal dimulai ({result}). Detail: journalctl -u frogger -b"
 "cli.setup.camera" = "Kamera yang digunakan: {device}"

@@ -1,21 +1,33 @@
 //! Audible cues during enrollment: with closed eyes the terminal cannot be
-//! read, so the important moments are signalled with system sounds.
+//! read, so the important moments are signalled with system sounds, and the
+//! prompts are spoken when a voice package (`frogger-voice-<lang>`) is
+//! installed.
 //!
 //! `frogger enroll` runs as root, but the audio server (PipeWire/PulseAudio)
-//! belongs to the desktop session of the invoking user. The sound is
-//! therefore played by a short-lived player process running as that user.
+//! belongs to the desktop session of the invoking user. Sounds are therefore
+//! played by short-lived player processes running as that user, one after
+//! another from a queue so that clips never overlap.
 
 use frogger_proto::Cue;
+use std::collections::VecDeque;
 use std::os::unix::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Command, Stdio};
+use std::process::{Child, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::{Condvar, Mutex, OnceLock};
+use std::time::{Duration, Instant};
 
-/// Cleared by `--no-sound`.
+/// Cleared by `--no-sound` (system sounds and voice).
 pub static ENABLED: AtomicBool = AtomicBool::new(true);
 
 const SOUND_DIR: &str = "/usr/share/sounds/freedesktop/stereo";
+/// Installed by the `frogger-voice-<lang>` packages: `<lang>/<key>.opus`.
+pub const VOICE_DIR: &str = "/usr/share/frogger/voices";
 const PLAYERS: [&str; 3] = ["pw-play", "paplay", "canberra-gtk-play"];
+/// Upper bound for a single clip; a hanging player is killed.
+const MAX_CLIP: Duration = Duration::from_secs(15);
+/// How long `finish` waits for queued sounds before the CLI exits.
+const MAX_DRAIN: Duration = Duration::from_secs(10);
 
 /// Sound of the freedesktop sound theme for a cue.
 fn sound_name(cue: Cue) -> &'static str {
@@ -27,16 +39,149 @@ fn sound_name(cue: Cue) -> &'static str {
     }
 }
 
-/// Play the sound for `cue` without blocking; falls back to the terminal
-/// bell when no sound theme, player or user session is available.
-pub fn play(cue: Cue) {
-    if !ENABLED.load(Ordering::Relaxed) {
+/// Directory with the voice clips for `lang`, if a voice package is
+/// installed for it.
+pub fn voice_dir(lang: &str) -> Option<PathBuf> {
+    let dir = Path::new(VOICE_DIR).join(lang);
+    dir.join("enroll.close_eyes.opus").is_file().then_some(dir)
+}
+
+/// Play the sound for `cue`; falls back to the terminal bell when no sound
+/// theme, player or user session is available. With a voice installed the
+/// step sound is left out – the spoken prompt that follows replaces it.
+pub fn play(cue: Cue, lang: &str) {
+    if !ENABLED.load(Ordering::Relaxed) || (cue == Cue::Step && voice_dir(lang).is_some()) {
         return;
     }
     let file = Path::new(SOUND_DIR).join(format!("{}.oga", sound_name(cue)));
-    if !(file.is_file() && spawn_player(&file)) {
+    if !(file.is_file() && player_available()) {
         bell();
+        return;
     }
+    enqueue(Item::Tone(file));
+}
+
+/// Speak the prompt `key` if a voice package for `lang` has a clip for it.
+pub fn say(key: &str, lang: &str) {
+    if !ENABLED.load(Ordering::Relaxed) || !valid_key(key) {
+        return;
+    }
+    let Some(file) = voice_dir(lang).map(|d| d.join(format!("{key}.opus"))) else {
+        return;
+    };
+    if file.is_file() && player_available() {
+        enqueue(Item::Voice(file));
+    }
+}
+
+/// Message keys are plain identifiers (`enroll.close_eyes`); anything else
+/// must never become part of a path.
+fn valid_key(key: &str) -> bool {
+    !key.is_empty()
+        && !key.starts_with('.')
+        && !key.contains("..")
+        && key
+            .bytes()
+            .all(|b| b.is_ascii_alphanumeric() || b == b'.' || b == b'_')
+}
+
+/// Wait (bounded) until all queued sounds have been played, so the last
+/// prompt is not cut off when the CLI exits.
+pub fn finish() {
+    let Some(q) = QUEUE.get() else { return };
+    let deadline = Instant::now() + MAX_DRAIN;
+    let mut st = q.state.lock().unwrap_or_else(|e| e.into_inner());
+    while !(st.items.is_empty() && !st.busy) {
+        let left = deadline.saturating_duration_since(Instant::now());
+        if left.is_zero() {
+            break;
+        }
+        st = q.done.wait_timeout(st, left).unwrap_or_else(|e| e.into_inner()).0;
+    }
+}
+
+#[derive(Debug, PartialEq)]
+enum Item {
+    Tone(PathBuf),
+    Voice(PathBuf),
+}
+
+#[derive(Default)]
+struct State {
+    items: VecDeque<Item>,
+    busy: bool,
+}
+
+struct Queue {
+    state: Mutex<State>,
+    ready: Condvar,
+    done: Condvar,
+}
+
+static QUEUE: OnceLock<Queue> = OnceLock::new();
+
+fn enqueue(item: Item) {
+    let q = QUEUE.get_or_init(|| {
+        std::thread::spawn(worker);
+        Queue {
+            state: Mutex::new(State::default()),
+            ready: Condvar::new(),
+            done: Condvar::new(),
+        }
+    });
+    let mut st = q.state.lock().unwrap_or_else(|e| e.into_inner());
+    push(&mut st.items, item);
+    q.ready.notify_one();
+}
+
+/// Queue policy: a new prompt supersedes prompts that have not started yet
+/// (the user only needs the current instruction); sounds are never dropped.
+fn push(items: &mut VecDeque<Item>, item: Item) {
+    if matches!(item, Item::Voice(_)) {
+        items.retain(|i| !matches!(i, Item::Voice(_)));
+    }
+    items.push_back(item);
+}
+
+fn worker() {
+    let q = loop {
+        // The queue is initialised right after spawning this thread.
+        if let Some(q) = QUEUE.get() {
+            break q;
+        }
+        std::thread::sleep(Duration::from_millis(5));
+    };
+    loop {
+        let item = {
+            let mut st = q.state.lock().unwrap_or_else(|e| e.into_inner());
+            st.busy = false;
+            q.done.notify_all();
+            loop {
+                if let Some(i) = st.items.pop_front() {
+                    st.busy = true;
+                    break i;
+                }
+                st = q.ready.wait(st).unwrap_or_else(|e| e.into_inner());
+            }
+        };
+        let (Item::Tone(file) | Item::Voice(file)) = item;
+        match spawn_player(&file) {
+            Some(child) => wait_bounded(child),
+            None => bell(),
+        }
+    }
+}
+
+fn wait_bounded(mut child: Child) {
+    let deadline = Instant::now() + MAX_CLIP;
+    while Instant::now() < deadline {
+        match child.try_wait() {
+            Ok(None) => std::thread::sleep(Duration::from_millis(20)),
+            _ => return,
+        }
+    }
+    let _ = child.kill();
+    let _ = child.wait();
 }
 
 fn bell() {
@@ -67,15 +212,28 @@ fn primary_gid(uid: u32) -> Option<u32> {
     }
 }
 
-fn spawn_player(file: &Path) -> bool {
+/// Runtime directory of the session user's audio server, if they have a
+/// session at all (otherwise nobody would hear anything).
+fn runtime_dir() -> Option<(u32, u32, PathBuf)> {
     let (uid, gid) = session_user();
     let runtime = PathBuf::from(format!("/run/user/{uid}"));
-    if !runtime.is_dir() {
-        return false; // no session of that user, nobody would hear it
-    }
+    runtime.is_dir().then_some((uid, gid, runtime))
+}
+
+fn player_available() -> bool {
+    runtime_dir().is_some()
+}
+
+fn spawn_player(file: &Path) -> Option<Child> {
+    let (uid, gid, runtime) = runtime_dir()?;
     // SAFETY: plain libc getter.
     let root = unsafe { libc::geteuid() } == 0;
+    let opus = file.extension().is_some_and(|e| e == "opus");
     for player in PLAYERS {
+        // libcanberra decodes only Vorbis and WAV.
+        if opus && player == "canberra-gtk-play" {
+            continue;
+        }
         let mut cmd = Command::new(player);
         if player == "canberra-gtk-play" {
             cmd.arg("-f");
@@ -92,15 +250,12 @@ fn spawn_player(file: &Path) -> bool {
             cmd.uid(uid).gid(gid);
         }
         match cmd.spawn() {
-            Ok(mut child) => {
-                std::thread::spawn(move || child.wait());
-                return true;
-            }
+            Ok(child) => return Some(child),
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => continue,
-            Err(_) => return false,
+            Err(_) => return None,
         }
     }
-    false
+    None
 }
 
 #[cfg(test)]
@@ -116,7 +271,27 @@ mod tests {
     #[test]
     fn disabled_plays_nothing() {
         ENABLED.store(false, Ordering::Relaxed);
-        play(Cue::Done); // must return without spawning or ringing
+        play(Cue::Done, "en"); // must return without spawning or ringing
+        say("enroll.done", "en");
         ENABLED.store(true, Ordering::Relaxed);
+        assert!(QUEUE.get().is_none());
+    }
+
+    #[test]
+    fn keys_cannot_escape_the_voice_directory() {
+        assert!(valid_key("enroll.close_eyes"));
+        assert!(valid_key("auth.blink"));
+        for bad in ["", "../x", "a/b", ".hidden", "a..b", "x y", "enroll.done\0"] {
+            assert!(!valid_key(bad), "{bad}");
+        }
+    }
+
+    #[test]
+    fn a_new_prompt_supersedes_pending_prompts_but_not_sounds() {
+        let mut q = VecDeque::new();
+        push(&mut q, Item::Voice("a".into()));
+        push(&mut q, Item::Tone("t".into()));
+        push(&mut q, Item::Voice("b".into()));
+        assert_eq!(q, [Item::Tone("t".into()), Item::Voice("b".into())]);
     }
 }

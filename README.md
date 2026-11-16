@@ -80,6 +80,15 @@ until the camera has seen it and repeats the prompt if necessary; a system
 sound tells you when to open your eyes again (`--no-sound` turns the sounds
 off).
 
+**Spoken prompts (optional):** with your eyes closed you cannot read the
+terminal. Install the voice package for your language from
+[frogger-voices](https://github.com/carstenkiefer/frogger-voices)
+(`frogger-voice-de`, `frogger-voice-en`, …) and FROGGER speaks the
+enrollment prompts instead. They are pre-recorded clips – no speech engine
+runs on your machine – and live in a separate repository because some of
+them have their own licenses. `frogger doctor` shows whether a voice is
+installed.
+
 Many IR cameras need their emitter switched on via a UVC extension unit. If
 the image is dark, configure it with
 [linux-enable-ir-emitter](https://github.com/EmixamPP/linux-enable-ir-emitter)
@@ -244,6 +253,9 @@ Catalogs live in [`i18n/`](i18n). Add a language by copying `en.toml`,
 translating the values (keep `{placeholders}`) and registering it in
 `crates/frogger-i18n/src/lib.rs`; `cargo test -p frogger-i18n` checks
 completeness. Native-speaker review of the existing catalogs is very welcome.
+The spoken prompts are maintained in
+[frogger-voices](https://github.com/carstenkiefer/frogger-voices) – feedback on
+the voices and recordings by native speakers are welcome there.
 
 ## License
 

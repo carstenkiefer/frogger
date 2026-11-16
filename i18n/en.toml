@@ -63,6 +63,8 @@
 "cli.doctor.encryption_on" = "Face data encryption: active (TPM 2.0)"
 "cli.doctor.encryption_off" = "Face data encryption: not active (file permissions only)"
 "cli.doctor.encryption_unknown" = "Face data encryption: key is set up (TPM 2.0); status unknown while the daemon is not running"
+"cli.doctor.voice_on" = "Spoken prompts: voice package installed"
+"cli.doctor.voice_hint" = "Spoken prompts: optional – install the package frogger-voice-{lang} (github.com/carstenkiefer/frogger-voices); until then system sounds are used"
 "cli.doctor.daemon_credentials" = "The service cannot start: systemd could not decrypt the face-data key (frogger.key, TPM). Details: journalctl -u frogger -b"
 "cli.doctor.daemon_failed" = "The service failed to start ({result}). Details: journalctl -u frogger -b"
 "cli.setup.camera" = "Using camera: {device}"

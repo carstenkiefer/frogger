@@ -63,6 +63,8 @@
 "cli.doctor.encryption_on" = "Encryption y'amakuru g'obuso: neekora (TPM 2.0)"
 "cli.doctor.encryption_off" = "Encryption y'amakuru g'obuso: terikukora (file permissions zonka)"
 "cli.doctor.encryption_unknown" = "Okushereka ebiri aha buso: ekisumuruzo kitaireweho (TPM 2.0); embeera terikumanyirwa sabiisi obu etarikukora"
+"cli.doctor.voice_on" = "Ebiragiro ebirikugambwa: ekipaki ky'eiraka kitairweho"
+"cli.doctor.voice_hint" = "Ebiragiro ebirikugambwa: tikiri kya buhame – teeraho ekipaki frogger-voice-{lang} (github.com/carstenkiefer/frogger-voices); kuhikya obu amaraka ga sisitemu nigo garikukozesibwa"
 "cli.doctor.daemon_credentials" = "Sabiisi teribaasa kutandika: systemd terabaasize kwiguraho ekisumuruzo ky'ebiri aha buso (frogger.key, TPM). Ebindi: journalctl -u frogger -b"
 "cli.doctor.daemon_failed" = "Sabiisi ekaremwa kutandika ({result}). Ebindi: journalctl -u frogger -b"
 "cli.setup.camera" = "Kamera erikukozesebwa: {device}"

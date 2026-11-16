@@ -62,6 +62,8 @@
 "cli.doctor.encryption_on" = "Penyulitan data wajah: aktif (TPM 2.0)"
 "cli.doctor.encryption_off" = "Penyulitan data wajah: tidak aktif (kebenaran fail sahaja)"
 "cli.doctor.encryption_unknown" = "Penyulitan data wajah: kunci telah disediakan (TPM 2.0); status tidak diketahui selagi perkhidmatan tidak berjalan"
+"cli.doctor.voice_on" = "Arahan suara: pakej suara telah dipasang"
+"cli.doctor.voice_hint" = "Arahan suara: pilihan – pasang pakej frogger-voice-{lang} (github.com/carstenkiefer/frogger-voices); sehingga itu bunyi sistem digunakan"
 "cli.doctor.daemon_credentials" = "Perkhidmatan tidak dapat dimulakan: systemd tidak dapat menyahsulit kunci data wajah (frogger.key, TPM). Butiran: journalctl -u frogger -b"
 "cli.doctor.daemon_failed" = "Perkhidmatan gagal dimulakan ({result}). Butiran: journalctl -u frogger -b"
 "cli.setup.camera" = "Kamera yang digunakan: {device}"
