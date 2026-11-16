@@ -62,6 +62,8 @@
 "cli.doctor.encryption_on" = "चेहरे के डेटा का एन्क्रिप्शन: सक्रिय (TPM 2.0)"
 "cli.doctor.encryption_off" = "चेहरे के डेटा का एन्क्रिप्शन: निष्क्रिय (केवल फ़ाइल अनुमतियाँ)"
 "cli.doctor.encryption_unknown" = "चेहरे के डेटा का एन्क्रिप्शन: कुंजी सेट है (TPM 2.0); सेवा न चलने तक स्थिति अज्ञात है"
+"cli.doctor.voice_on" = "बोले गए निर्देश: आवाज़ पैकेज इंस्टॉल है"
+"cli.doctor.voice_hint" = "बोले गए निर्देश: वैकल्पिक – पैकेज frogger-voice-{lang} इंस्टॉल करें (github.com/carstenkiefer/frogger-voices); तब तक सिस्टम ध्वनियाँ इस्तेमाल होती हैं"
 "cli.doctor.daemon_credentials" = "सेवा शुरू नहीं हो पा रही: systemd चेहरे के डेटा की कुंजी (frogger.key, TPM) को डिक्रिप्ट नहीं कर सका। विवरण: journalctl -u frogger -b"
 "cli.doctor.daemon_failed" = "सेवा शुरू नहीं हो सकी ({result})। विवरण: journalctl -u frogger -b"
 "cli.setup.camera" = "उपयोग किया जा रहा कैमरा: {device}"

@@ -62,6 +62,8 @@
 "cli.doctor.encryption_on" = "顔データの暗号化: 有効 (TPM 2.0)"
 "cli.doctor.encryption_off" = "顔データの暗号化: 無効（ファイル権限のみ）"
 "cli.doctor.encryption_unknown" = "顔データの暗号化: 鍵は設定済み (TPM 2.0)。サービスが停止中のため状態は不明です"
+"cli.doctor.voice_on" = "音声ガイド：音声パッケージがインストールされています"
+"cli.doctor.voice_hint" = "音声ガイド：任意 – パッケージ frogger-voice-{lang} をインストールしてください（github.com/carstenkiefer/frogger-voices）。それまではシステムサウンドが使われます"
 "cli.doctor.daemon_credentials" = "サービスを起動できません: systemd が顔データの鍵 (frogger.key, TPM) を復号できませんでした。詳細: journalctl -u frogger -b"
 "cli.doctor.daemon_failed" = "サービスの起動に失敗しました ({result})。詳細: journalctl -u frogger -b"
 "cli.setup.camera" = "使用するカメラ: {device}"

@@ -62,6 +62,8 @@
 "cli.doctor.encryption_on" = "얼굴 데이터 암호화: 활성 (TPM 2.0)"
 "cli.doctor.encryption_off" = "얼굴 데이터 암호화: 비활성 (파일 권한만)"
 "cli.doctor.encryption_unknown" = "얼굴 데이터 암호화: 키가 설정됨(TPM 2.0). 서비스가 실행 중이 아니어서 상태를 알 수 없습니다"
+"cli.doctor.voice_on" = "음성 안내: 음성 패키지가 설치되어 있습니다"
+"cli.doctor.voice_hint" = "음성 안내: 선택 사항 – frogger-voice-{lang} 패키지를 설치하세요 (github.com/carstenkiefer/frogger-voices). 그 전까지는 시스템 소리가 사용됩니다"
 "cli.doctor.daemon_credentials" = "서비스를 시작할 수 없습니다: systemd가 얼굴 데이터 키(frogger.key, TPM)를 복호화하지 못했습니다. 자세한 내용: journalctl -u frogger -b"
 "cli.doctor.daemon_failed" = "서비스를 시작하지 못했습니다({result}). 자세한 내용: journalctl -u frogger -b"
 "cli.setup.camera" = "사용할 카메라: {device}"

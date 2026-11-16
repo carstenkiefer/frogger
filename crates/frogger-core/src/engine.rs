@@ -42,7 +42,8 @@ const TURN_LIMIT: Duration = Duration::from_secs(15);
 /// Ask for the other side after one side was seen for this long.
 const OTHER_SIDE_HINT: Duration = Duration::from_secs(3);
 /// Closed eyes: each try waits this long, then the prompt is repeated.
-const CLOSE_TRY: Duration = Duration::from_secs(6);
+// Long enough to listen to a spoken prompt (~4 s) and then close the eyes.
+const CLOSE_TRY: Duration = Duration::from_secs(9);
 const CLOSE_TRIES: usize = 3;
 /// Reaction time after the prompt: frames in this window are ignored.
 const CLOSE_GRACE: Duration = Duration::from_millis(500);
@@ -61,6 +62,8 @@ const CLOSED_MIN_IDENTITY: f32 = 0.35;
 /// of closed eyes less precisely, which shifts the yaw estimate (field test:
 /// 63 of 82 closed-eye frames rejected at 0.12).
 const CLOSED_MAX_YAW: f32 = 0.25;
+/// Minimum time budget of a verification attempt during enrollment.
+const VERIFY_MIN: Duration = Duration::from_secs(8);
 /// Verification attempts at the end of enrollment.
 const VERIFY_TRIES: usize = 2;
 /// V4L2 buffers queued by the camera (see Camera::open).
@@ -114,6 +117,22 @@ fn load_models(m: &crate::config::ModelConfig) -> std::result::Result<Models, St
     };
     load().map_err(|e| format!("{e:#}"))
 }
+
+/// Signals for the person during enrollment besides the text: audible cues
+/// and the key of a prompt that may be spoken (voice packages).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Signal {
+    Cue(Cue),
+    Say(&'static str),
+}
+
+/// Prompts whose failure text may be spoken when enrollment fails.
+const SPOKEN_FAILURES: [&str; 4] = [
+    "enroll.calibration_failed",
+    "enroll.no_face",
+    "enroll.verify_failed",
+    "enroll.multiple_faces",
+];
 
 /// Callback for user-facing (already translated) progress messages.
 pub type Emit<'a> = &'a mut dyn FnMut(String);
@@ -471,14 +490,25 @@ impl Engine {
         accept_rgb: bool,
         lang: &str,
         emit: Emit,
-        cue: &mut dyn FnMut(Cue),
+        cue: &mut dyn FnMut(Signal),
     ) -> Outcome {
         let outcome = self.enroll_steps(user, label, accept_rgb, lang, emit, cue);
-        cue(if outcome == Outcome::Success {
+        match &outcome {
+            Outcome::Success => cue(Signal::Say("enroll.done")),
+            Outcome::Failure(text) | Outcome::Unavailable(text) | Outcome::Denied(text) => {
+                if let Some(key) = SPOKEN_FAILURES
+                    .into_iter()
+                    .find(|k| text.starts_with(&tr(lang, k, &[])))
+                {
+                    cue(Signal::Say(key));
+                }
+            }
+        }
+        cue(Signal::Cue(if outcome == Outcome::Success {
             Cue::Done
         } else {
             Cue::Failed
-        });
+        }));
         outcome
     }
 
@@ -489,7 +519,7 @@ impl Engine {
         accept_rgb: bool,
         lang: &str,
         emit: Emit,
-        cue: &mut dyn FnMut(Cue),
+        cue: &mut dyn FnMut(Signal),
     ) -> Outcome {
         let fingerprint = match self.models() {
             Ok(m) => m.fingerprint.as_str(),
@@ -525,7 +555,12 @@ impl Engine {
         let rejected = std::cell::Cell::new(Rejects::default());
         // Next usable frame, or None when `limit` has passed. Emits a hint
         // when no face was seen for a while.
-        let mut next = |cam: &mut Camera, since: Instant, limit: Duration, emit: Emit| -> Option<Analysis> {
+        let mut next = |cam: &mut Camera,
+                        since: Instant,
+                        limit: Duration,
+                        emit: Emit,
+                        cue: &mut dyn FnMut(Signal)|
+         -> Option<Analysis> {
             let last_face = Instant::now();
             while since.elapsed() < limit {
                 let r = self.enroll_frame(cam, infrared, &mut strobe, &mut rejects);
@@ -536,10 +571,12 @@ impl Engine {
                         if !hinted_multi && rejects.multiple >= 5 {
                             hinted_multi = true;
                             emit(tr(lang, "enroll.multiple_faces", &[]));
+                            cue(Signal::Say("enroll.multiple_faces"));
                         }
                         if !hinted_no_face && last_face.elapsed() >= NO_FACE_HINT {
                             hinted_no_face = true;
                             emit(tr(lang, "enroll.searching", &[]));
+                            cue(Signal::Say("enroll.searching"));
                         }
                     }
                 }
@@ -550,12 +587,13 @@ impl Engine {
         // Step 1: looking straight ahead – open-eye references and the
         // baseline head pose.
         emit(tr(lang, "enroll.start", &[("user", user)]));
+        cue(Signal::Say("enroll.start"));
         flush(&mut cam);
         let step = Instant::now();
         let mut frontal: Vec<Analysis> = Vec::new();
         let mut last_kept = step - SAMPLE_INTERVAL;
         while frontal.len() < FRONTAL_SAMPLES {
-            let Some(a) = next(&mut cam, step, STEP_LIMIT, emit) else {
+            let Some(a) = next(&mut cam, step, STEP_LIMIT, emit, cue) else {
                 return Outcome::Failure(tr(lang, "enroll.no_face", &[]));
             };
             // The person is still reading the prompt (looking at the text,
@@ -568,7 +606,7 @@ impl Engine {
                 last_kept = Instant::now();
             }
         }
-        cue(Cue::Step);
+        cue(Signal::Cue(Cue::Step));
         let base_yaw = median(frontal.iter().map(|a| yaw(&a.face)).collect());
         log::info!(
             "enrollment of {user}: frontal face brightness {:.0}",
@@ -579,6 +617,7 @@ impl Engine {
         // Step 2: turn the head to both sides (better recognition at an
         // angle). Optional: after TURN_LIMIT enrollment continues anyway.
         emit(tr(lang, "enroll.turn", &[]));
+        cue(Signal::Say("enroll.turn"));
         flush(&mut cam);
         let step = Instant::now();
         let mut turned: Vec<Analysis> = Vec::new();
@@ -586,7 +625,7 @@ impl Engine {
         let mut hinted_other = false;
         let mut last_kept = step - SAMPLE_INTERVAL;
         while !(left.is_some() && right.is_some()) {
-            let Some(a) = next(&mut cam, step, TURN_LIMIT, emit) else {
+            let Some(a) = next(&mut cam, step, TURN_LIMIT, emit, cue) else {
                 break;
             };
             let d = yaw(&a.face) - base_yaw;
@@ -599,6 +638,7 @@ impl Engine {
             if !hinted_other && one_side.is_some_and(|t| t.elapsed() >= OTHER_SIDE_HINT) {
                 hinted_other = true;
                 emit(tr(lang, "enroll.turn_other", &[]));
+                cue(Signal::Say("enroll.turn_other"));
             }
             if d.abs() >= TURN_YAW / 2.0
                 && last_kept.elapsed() >= SAMPLE_INTERVAL
@@ -608,7 +648,7 @@ impl Engine {
                 last_kept = Instant::now();
             }
         }
-        cue(Cue::Step);
+        cue(Signal::Cue(Cue::Step));
         log::info!(
             "enrollment of {user}: {} frontal samples, {} turned samples (left {}, right {}); \
              frames without usable face so far {:?}",
@@ -666,20 +706,18 @@ impl Engine {
         let (mut seen, mut other_person, mut turned_away) = (0u32, 0u32, 0u32);
         let rejected_before = rejected.get();
         for attempt in 0..CLOSE_TRIES {
-            emit(tr(
-                lang,
-                if attempt == 0 {
-                    "enroll.close_eyes"
-                } else {
-                    "enroll.close_again"
-                },
-                &[],
-            ));
+            let key = if attempt == 0 {
+                "enroll.close_eyes"
+            } else {
+                "enroll.close_again"
+            };
+            emit(tr(lang, key, &[]));
+            cue(Signal::Say(key));
             flush(&mut cam);
             closed.clear();
             let step = Instant::now();
             let mut closed_since: Option<Instant> = None;
-            while let Some(a) = next(&mut cam, step, CLOSE_TRY, emit) {
+            while let Some(a) = next(&mut cam, step, CLOSE_TRY, emit, cue) {
                 if step.elapsed() < CLOSE_GRACE {
                     continue;
                 }
@@ -725,10 +763,11 @@ impl Engine {
         }
         // Step 4: open the eyes again; wait until they are (so the
         // verification does not start with closed eyes).
-        cue(Cue::EyesClosed);
+        cue(Signal::Cue(Cue::EyesClosed));
         emit(tr(lang, "enroll.open_eyes", &[]));
+        cue(Signal::Say("enroll.open_eyes"));
         let step = Instant::now();
-        while let Some(a) = next(&mut cam, step, OPEN_WAIT, emit) {
+        while let Some(a) = next(&mut cam, step, OPEN_WAIT, emit, cue) {
             if usable(&a) && eye_sim(&a.eyes) >= open_floor {
                 break;
             }
@@ -766,13 +805,35 @@ impl Engine {
         // Step 5: verify the fresh template with the real challenge.
         std::thread::sleep(Duration::from_millis(500));
         emit(tr(lang, "enroll.verify", &[]));
-        let timeout = Duration::from_secs_f32(self.cfg.auth.timeout_secs);
+        cue(Signal::Say("enroll.verify"));
+        // Enough time to hear the spoken prompts before blinking.
+        let timeout = Duration::from_secs_f32(self.cfg.auth.timeout_secs).max(VERIFY_MIN);
+        let blink_text = tr(lang, "auth.blink", &[]);
         for attempt in 1..=VERIFY_TRIES {
             flush(&mut cam);
-            match self.attempt_on(&mut cam, kind, Instant::now(), &template, timeout, lang, emit) {
+            // The blink prompt comes from the recognition attempt itself.
+            let result = {
+                let mut prompted = |text: String| {
+                    if text == blink_text {
+                        cue(Signal::Say("auth.blink"));
+                    }
+                    emit(text);
+                };
+                self.attempt_on(
+                    &mut cam,
+                    kind,
+                    Instant::now(),
+                    &template,
+                    timeout,
+                    lang,
+                    &mut prompted,
+                )
+            };
+            match result {
                 Ok(r) if r.success => break,
                 Ok(r) if attempt < VERIFY_TRIES && r.reason == Some(FailReason::NoBlink) => {
                     emit(tr(lang, "enroll.verify_retry", &[]));
+                    cue(Signal::Say("enroll.verify_retry"));
                 }
                 Ok(r) => {
                     let why = tr(

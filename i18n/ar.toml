@@ -62,6 +62,8 @@
 "cli.doctor.encryption_on" = "تشفير بيانات الوجه: مفعّل (TPM 2.0)"
 "cli.doctor.encryption_off" = "تشفير بيانات الوجه: غير مفعّل (أذونات الملفات فقط)"
 "cli.doctor.encryption_unknown" = "تشفير بيانات الوجه: المفتاح مُعدّ (TPM 2.0)؛ الحالة غير معروفة ما دامت الخدمة لا تعمل"
+"cli.doctor.voice_on" = "التعليمات المنطوقة: حزمة الصوت مثبّتة"
+"cli.doctor.voice_hint" = "التعليمات المنطوقة: اختيارية – ثبّت الحزمة frogger-voice-{lang} ‏(github.com/carstenkiefer/frogger-voices)؛ وحتى ذلك الحين تُستخدم أصوات النظام"
 "cli.doctor.daemon_credentials" = "لا يمكن تشغيل الخدمة: لم يتمكن systemd من فك تشفير مفتاح بيانات الوجه (frogger.key، TPM). التفاصيل: journalctl -u frogger -b"
 "cli.doctor.daemon_failed" = "تعذّر تشغيل الخدمة ({result}). التفاصيل: journalctl -u frogger -b"
 "cli.setup.camera" = "الكاميرا المستخدمة: {device}"

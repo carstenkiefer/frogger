@@ -110,6 +110,9 @@ pub enum Event {
     /// Audible signal for the user (enrollment: the eyes may be closed, so
     /// the terminal cannot be read). Only sent to the `frogger` CLI.
     Cue { cue: Cue },
+    /// A prompt that may be spoken (message key, e.g. `enroll.close_eyes`):
+    /// the CLI plays a clip of an installed voice package. Enrollment only.
+    Say { key: String },
 }
 
 /// Kinds of audible signals.

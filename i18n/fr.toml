@@ -62,6 +62,8 @@
 "cli.doctor.encryption_on" = "Chiffrement des données faciales : actif (TPM 2.0)"
 "cli.doctor.encryption_off" = "Chiffrement des données faciales : inactif (droits d'accès uniquement)"
 "cli.doctor.encryption_unknown" = "Chiffrement des données faciales : clé configurée (TPM 2.0) ; état inconnu tant que le service ne tourne pas"
+"cli.doctor.voice_on" = "Consignes vocales : paquet de voix installé"
+"cli.doctor.voice_hint" = "Consignes vocales : facultatif – installez le paquet frogger-voice-{lang} (github.com/carstenkiefer/frogger-voices) ; en attendant, les sons du système sont utilisés"
 "cli.doctor.daemon_credentials" = "Le service ne démarre pas : systemd n'a pas pu déchiffrer la clé des données faciales (frogger.key, TPM). Détails : journalctl -u frogger -b"
 "cli.doctor.daemon_failed" = "Le service n'a pas pu démarrer ({result}). Détails : journalctl -u frogger -b"
 "cli.setup.camera" = "Caméra utilisée : {device}"

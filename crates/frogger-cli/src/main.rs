@@ -93,7 +93,9 @@ fn main() {
     if cli.no_sound {
         sound::ENABLED.store(false, std::sync::atomic::Ordering::Relaxed);
     }
-    if let Err(e) = run(cli, lang) {
+    let result = run(cli, lang);
+    sound::finish();
+    if let Err(e) = result {
         eprintln!("frogger: {e:#}");
         std::process::exit(1);
     }
@@ -166,7 +168,8 @@ fn call(socket: &str, op: Op, lang: &str) -> Result<(AuthStatus, String, Option<
                 data,
             } => return Ok((status, message, data)),
             Event::Error { message } => bail!("{message}"),
-            Event::Cue { cue } => sound::play(cue),
+            Event::Cue { cue } => sound::play(cue, lang),
+            Event::Say { key } => sound::say(&key, lang),
         }
     }
 }
@@ -512,6 +515,11 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
         None => "cli.doctor.encryption_off",
     };
     println!("  {}", tr(lang, key, &[]));
+    if sound::voice_dir(lang).is_some() {
+        println!("  {}", tr(lang, "cli.doctor.voice_on", &[]));
+    } else {
+        println!("  {}", tr(lang, "cli.doctor.voice_hint", &[("lang", lang)]));
+    }
     let desktop = std::env::var("XDG_CURRENT_DESKTOP")
         .unwrap_or_default()
         .to_lowercase();
