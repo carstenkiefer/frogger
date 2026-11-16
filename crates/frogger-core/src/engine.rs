@@ -104,7 +104,7 @@ struct Models {
 
 fn load_models(m: &crate::config::ModelConfig) -> std::result::Result<Models, String> {
     let load = || -> Result<Models> {
-        let mut pipeline = Pipeline::load(&m.detector, &m.recognizer)?;
+        let mut pipeline = Pipeline::load(&m.detector, &m.recognizer)?.with_eye_state(&m.eye_state);
         pipeline.detector.score_threshold = m.detection_threshold;
         let fingerprint = store::model_fingerprint(&m.recognizer)?;
         Ok(Models {
@@ -301,7 +301,7 @@ impl Engine {
                     t,
                     chroma: frame.chroma,
                     analysis: None,
-                    eyes_only: Some(vision::eye_sample(&frame.image, a)),
+                    eyes_only: Some(models.pipeline.eye_sample(&frame.image, a)),
                     emitter_off: false,
                     depth: None,
                 }

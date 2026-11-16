@@ -63,10 +63,14 @@ min_relief_mm = 8.0
 # "blink": IR + blink challenge (recommended, defeats photos and screens)
 # "ir-only": IR only – printed IR photos are not reliably rejected!
 mode = "blink"
-max_closed_secs = 1.5
+max_closed_secs = 2.0
 min_ir_face_brightness = 25.0
 min_track_iou = 0.45
 reject_multiple_faces = true
+# EXPERIMENTAL: also detect blinks with the eye-state model
+# (models.eye_state). On laptop IR cameras it often rates open eyes as
+# closed, so it is off by default.
+eye_model = false
 
 [policy]
 # Allow face login on devices WITHOUT an infrared camera. Insecure: a photo
@@ -78,4 +82,6 @@ sensitive_device = false
 [models]
 detector = "/usr/share/frogger/models/face_detection_yunet_2023mar.onnx"
 recognizer = "/usr/share/frogger/models/face_recognition_sface_2021dec.onnx"
+# Optional: eye state open/closed (infrared-trained), see liveness.eye_model.
+eye_state = "/usr/share/frogger/models/open_closed_eye.onnx"
 detection_threshold = 0.8

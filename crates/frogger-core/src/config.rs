@@ -202,16 +202,22 @@ pub struct LivenessConfig {
     /// Reject frames with more than one face (prevents a second person or a
     /// photo next to the user from contributing).
     pub reject_multiple_faces: bool,
+    /// EXPERIMENTAL: also detect blinks with the eye-state model (open/closed
+    /// per eye, trained on infrared images) when it is installed. Field test:
+    /// on a laptop IR camera it rated open eyes as closed most of the time,
+    /// so it is off by default. A blink detected by either method counts.
+    pub eye_model: bool,
 }
 
 impl Default for LivenessConfig {
     fn default() -> Self {
         LivenessConfig {
             mode: LivenessMode::Blink,
-            max_closed_secs: 1.5,
+            max_closed_secs: 2.0,
             min_ir_face_brightness: 25.0,
             min_track_iou: 0.45,
             reject_multiple_faces: true,
+            eye_model: false,
         }
     }
 }
@@ -234,6 +240,9 @@ pub struct PolicyConfig {
 pub struct ModelConfig {
     pub detector: PathBuf,
     pub recognizer: PathBuf,
+    /// Eye state model (optional: without it only the calibrated eye
+    /// patches detect blinks).
+    pub eye_state: PathBuf,
     pub detection_threshold: f32,
 }
 
@@ -242,6 +251,7 @@ impl Default for ModelConfig {
         ModelConfig {
             detector: Path::new(MODEL_DIR).join("face_detection_yunet_2023mar.onnx"),
             recognizer: Path::new(MODEL_DIR).join("face_recognition_sface_2021dec.onnx"),
+            eye_state: Path::new(MODEL_DIR).join("open_closed_eye.onnx"),
             detection_threshold: 0.8,
         }
     }
