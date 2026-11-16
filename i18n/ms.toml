@@ -29,7 +29,7 @@
 "enroll.no_face" = "Tiada wajah yang boleh digunakan ditemui. Semak pencahayaan dan jarak ke kamera."
 "enroll.multiple_faces" = "Hanya seorang sahaja boleh berada di hadapan kamera."
 "enroll.inconsistent" = "Sampel yang dirakam bukan milik orang yang sama. Sila cuba lagi."
-"enroll.calibration_failed" = "Mata terbuka dan tertutup tidak dapat dibezakan. Tanggalkan cermin mata yang memantulkan cahaya kuat dan cuba lagi."
+"enroll.calibration_failed" = "Mata tertutup tidak dapat dirakam dengan andal. Sila cuba lagi: lihat terus ke kamera dan kekalkan mata terpejam sehingga anda mendengar bunyi. Cermin mata dengan pantulan kuat juga boleh menjadi puncanya."
 "enroll.rgb_refused" = "Tiada kamera inframerah ditemui. Log masuk wajah tanpa IR boleh diperdaya dengan foto dan dilumpuhkan oleh dasar (policy.allow_insecure_rgb)."
 "enroll.rgb_needs_ack" = "Tiada kamera inframerah ditemui. Pendaftaran memerlukan pengakuan jelas --accept-insecure-rgb."
 "enroll.rgb_warning" = "AMARAN: mendaftar dengan kamera web biasa. Foto atau video anda mungkin boleh membuka kunci peranti ini."

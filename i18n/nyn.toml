@@ -30,7 +30,7 @@
 "enroll.no_face" = "Tihabonekire buso oburikukozesebwa. Kyebera omushana n'oku ori hare na kamera."
 "enroll.multiple_faces" = "Omuntu omwe wenka niwe arikwikirizibwa kuba omu maisho ga kamera."
 "enroll.inconsistent" = "Ebyokureeberaho ebyakwatsirwe tibiri by'omuntu omwe. Ninkushaba ongyere ogyezeho."
-"enroll.calibration_failed" = "Tikibaasize kutaanisa amaisho agahumuuzire n'agahumirize. Ihaho gilaasi ezirikwakyengyerereza munonga, reero ongyere ogyezeho."
+"enroll.calibration_failed" = "Amaisho agahumirire tigaabaasize kuhandiikwa kurungi. Ongyere ogyezeho: reeba omuri kamera kurungi kandi ogume nohumiriize okuhikya obwo oraahurire eiraka. Ebirahuri by'amaisho ebirikumurika munonga nabyo nibibaasa kubireeta."
 "enroll.rgb_refused" = "Tihabonekire kamera ya infrared. Okwingira n'obuso ahataraho IR nikubaasa kubeihwa n'ekishushani, kandi ebiragiro tibikwikiriza (policy.allow_insecure_rgb)."
 "enroll.rgb_needs_ack" = "Tihabonekire kamera ya infrared. Okuhandiika nikwetenga ohamye ngu noikiriza, orikukozesa --accept-insecure-rgb."
 "enroll.rgb_warning" = "OBURABUZI: nohandiika okozesa webcam ya buriijo. Ekishushani nari vidiyo yaawe nibibaasa kukingura ekyoma eki."

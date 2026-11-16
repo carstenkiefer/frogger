@@ -30,7 +30,7 @@
 "enroll.no_face" = "Nta sura ikoreshwa yabonetse. Genzura urumuri n'intera iri hagati yawe na kamera."
 "enroll.multiple_faces" = "Umuntu umwe gusa ni we wemerewe kuba imbere ya kamera."
 "enroll.inconsistent" = "Ingero zafashwe si iz'umuntu umwe. Nyamuneka ongera ugerageze."
-"enroll.calibration_failed" = "Ntibyashobotse gutandukanya amaso afunguye n'amaso afunze. Kuramo amadarubindi agarura urumuri cyane hanyuma wongere ugerageze."
+"enroll.calibration_failed" = "Amaso ahumirije ntiyashoboye kwandikwa neza. Ongera ugerageze: reba imbere muri kamera kandi ukomeze uhumirije amaso kugeza wumvise ijwi. Indorerwamo z'amaso zifite urumuri rwinshi na zo zishobora kubitera."
 "enroll.rgb_refused" = "Nta kamera ya infrarouge yabonetse. Kwinjira ukoresheje isura nta IR bishobora gushukwa n'ifoto, kandi byahagaritswe n'amabwiriza (policy.allow_insecure_rgb)."
 "enroll.rgb_needs_ack" = "Nta kamera ya infrarouge yabonetse. Kwandikisha bisaba kubyemeza ku mugaragaro ukoresheje --accept-insecure-rgb."
 "enroll.rgb_warning" = "IBURIRA: urimo kwandikisha ukoresheje kamera isanzwe (webcam). Ifoto cyangwa videwo yawe bishobora gufungura iki gikoresho."

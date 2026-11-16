@@ -29,7 +29,7 @@
 "enroll.no_face" = "사용할 수 있는 얼굴을 찾지 못했습니다. 조명과 카메라와의 거리를 확인하세요."
 "enroll.multiple_faces" = "카메라 앞에는 한 사람만 있어야 합니다."
 "enroll.inconsistent" = "기록된 샘플이 같은 사람의 것이 아닙니다. 다시 시도하세요."
-"enroll.calibration_failed" = "뜬 눈과 감은 눈을 구별할 수 없습니다. 반사가 심한 안경을 벗고 다시 시도하세요."
+"enroll.calibration_failed" = "감은 눈을 안정적으로 기록하지 못했습니다. 다시 시도하세요: 카메라를 정면으로 보고 신호음이 들릴 때까지 눈을 감고 계세요. 반사가 심한 안경도 원인일 수 있습니다."
 "enroll.rgb_refused" = "적외선 카메라를 찾을 수 없습니다. IR 없는 얼굴 로그인은 사진으로 속일 수 있으므로 정책에 의해 비활성화되어 있습니다 (policy.allow_insecure_rgb)."
 "enroll.rgb_needs_ack" = "적외선 카메라를 찾을 수 없습니다. 등록하려면 명시적인 동의 --accept-insecure-rgb가 필요합니다."
 "enroll.rgb_warning" = "경고: 일반 웹캠으로 등록하고 있습니다. 사용자의 사진이나 동영상으로 이 기기의 잠금이 해제될 수 있습니다."

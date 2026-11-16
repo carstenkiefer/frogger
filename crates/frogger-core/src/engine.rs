@@ -57,6 +57,10 @@ const CLOSED_MARGIN: f32 = 0.15;
 /// Identity check while the eyes are closed (embedding cosine to the open
 /// samples; closed eyes lower it, the multiple-faces check still applies).
 const CLOSED_MIN_IDENTITY: f32 = 0.35;
+/// Head pose tolerance with closed eyes: the detector places the landmarks
+/// of closed eyes less precisely, which shifts the yaw estimate (field test:
+/// 63 of 82 closed-eye frames rejected at 0.12).
+const CLOSED_MAX_YAW: f32 = 0.25;
 /// Verification attempts at the end of enrollment.
 const VERIFY_TRIES: usize = 2;
 /// V4L2 buffers queued by the camera (see Camera::open).
@@ -417,27 +421,36 @@ impl Engine {
     }
 
     /// Next frame usable for enrollment: lit by the emitter, exactly one face,
-    /// large and bright enough. `multi` counts frames with several faces.
+    /// large and bright enough. Rejected frames are counted in `rejects`.
     fn enroll_frame(
         &self,
         cam: &mut Camera,
         infrared: bool,
         strobe: &mut StrobeFilter,
-        multi: &mut u32,
+        rejects: &mut Rejects,
     ) -> Option<Analysis> {
-        let frame = cam.frame().ok()?;
+        let Ok(frame) = cam.frame() else {
+            rejects.capture += 1;
+            return None;
+        };
         if infrared && (frame.chroma >= 2.0 || strobe.is_off(frame.mean)) {
+            rejects.unlit += 1;
             return None;
         }
-        let a = self.models().ok()?.pipeline.analyse(&frame.image).ok()??;
+        let Some(a) = self.models().ok()?.pipeline.analyse(&frame.image).ok().flatten() else {
+            rejects.no_face += 1;
+            return None;
+        };
         if a.face_count > 1 {
-            *multi += 1;
+            rejects.multiple += 1;
             return None;
         }
         if a.face.interocular() < 28.0 {
+            rejects.too_small += 1;
             return None; // too far away / too small for reliable features
         }
         if infrared && a.face_brightness < self.cfg.liveness.min_ir_face_brightness {
+            rejects.dark += 1;
             return None;
         }
         Some(a)
@@ -505,21 +518,22 @@ impl Engine {
         }
 
         let mut strobe = StrobeFilter::default();
-        let mut multi = 0u32;
+        let mut rejects = Rejects::default();
         let mut hinted_no_face = false;
         let mut hinted_multi = false;
-        // Frames without a usable face (diagnostics).
-        let skipped = std::cell::Cell::new(0u32);
+        // Frames without a usable face, by reason (diagnostics).
+        let rejected = std::cell::Cell::new(Rejects::default());
         // Next usable frame, or None when `limit` has passed. Emits a hint
         // when no face was seen for a while.
         let mut next = |cam: &mut Camera, since: Instant, limit: Duration, emit: Emit| -> Option<Analysis> {
             let last_face = Instant::now();
             while since.elapsed() < limit {
-                match self.enroll_frame(cam, infrared, &mut strobe, &mut multi) {
+                let r = self.enroll_frame(cam, infrared, &mut strobe, &mut rejects);
+                rejected.set(rejects);
+                match r {
                     Some(a) => return Some(a),
                     None => {
-                        skipped.set(skipped.get() + 1);
-                        if !hinted_multi && multi >= 5 {
+                        if !hinted_multi && rejects.multiple >= 5 {
                             hinted_multi = true;
                             emit(tr(lang, "enroll.multiple_faces", &[]));
                         }
@@ -596,11 +610,13 @@ impl Engine {
         }
         cue(Cue::Step);
         log::info!(
-            "enrollment of {user}: {} frontal samples, {} turned samples (left {}, right {})",
+            "enrollment of {user}: {} frontal samples, {} turned samples (left {}, right {}); \
+             frames without usable face so far {:?}",
             frontal.len(),
             turned.len(),
             left.is_some(),
-            right.is_some()
+            right.is_some(),
+            rejected.get()
         );
         if frontal.len() < 3 {
             return Outcome::Failure(tr(lang, "enroll.no_face", &[]));
@@ -643,12 +659,12 @@ impl Engine {
         // closed: looser identity and pose limits than for open eyes.
         let usable = |a: &Analysis| {
             vision::cosine(&a.embedding, &mean) >= CLOSED_MIN_IDENTITY
-                && (yaw(&a.face) - base_yaw).abs() < TURN_YAW * 1.5
+                && (yaw(&a.face) - base_yaw).abs() < CLOSED_MAX_YAW
         };
         let mut closed: Vec<(f32, EyePair)> = Vec::new();
         let mut lowest = f32::INFINITY;
         let (mut seen, mut other_person, mut turned_away) = (0u32, 0u32, 0u32);
-        let skipped_before = skipped.get();
+        let rejected_before = rejected.get();
         for attempt in 0..CLOSE_TRIES {
             emit(tr(
                 lang,
@@ -694,10 +710,10 @@ impl Engine {
         }
         log::info!(
             "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
-             {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {}, \
+             {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {:?}, \
              other identity {other_person}, head turned {turned_away})",
             closed.len(),
-            skipped.get() - skipped_before
+            rejected.get().since(&rejected_before)
         );
         // Only the clearest closed frames become the reference: frames taken
         // while the lids were still moving would blur it.
@@ -792,6 +808,30 @@ pub fn kind_name(k: CameraKind) -> &'static str {
     match k {
         CameraKind::Infrared => "infrared",
         CameraKind::Rgb | CameraKind::Unknown => "rgb",
+    }
+}
+
+/// Why frames were not usable during enrollment (diagnostics).
+#[derive(Clone, Copy, Debug, Default)]
+struct Rejects {
+    capture: u32,
+    unlit: u32,
+    no_face: u32,
+    multiple: u32,
+    too_small: u32,
+    dark: u32,
+}
+
+impl Rejects {
+    fn since(&self, before: &Rejects) -> Rejects {
+        Rejects {
+            capture: self.capture - before.capture,
+            unlit: self.unlit - before.unlit,
+            no_face: self.no_face - before.no_face,
+            multiple: self.multiple - before.multiple,
+            too_small: self.too_small - before.too_small,
+            dark: self.dark - before.dark,
+        }
     }
 }
 

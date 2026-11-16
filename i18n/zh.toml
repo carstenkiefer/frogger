@@ -29,7 +29,7 @@
 "enroll.no_face" = "未找到可用的人脸。请检查光线以及与摄像头的距离。"
 "enroll.multiple_faces" = "摄像头前只能有一个人。"
 "enroll.inconsistent" = "录制的样本不属于同一个人。请重试。"
-"enroll.calibration_failed" = "无法区分睁眼和闭眼。请摘下反光强烈的眼镜后重试。"
+"enroll.calibration_failed" = "未能可靠地记录闭眼状态。请重试：正视摄像头，并保持闭眼直到听到提示音。反光强烈的眼镜也可能导致此问题。"
 "enroll.rgb_refused" = "未找到红外摄像头。没有红外的人脸登录可以被照片欺骗，已被策略禁用（policy.allow_insecure_rgb）。"
 "enroll.rgb_needs_ack" = "未找到红外摄像头。录入需要明确确认 --accept-insecure-rgb。"
 "enroll.rgb_warning" = "警告：正在使用普通网络摄像头录入。您的照片或视频可能会解锁此设备。"
