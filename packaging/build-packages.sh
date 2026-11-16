@@ -27,7 +27,7 @@ esac
 for f in froggerd frogger frogger-askpass libpam_frogger.so; do
   [ -f "$BIN/$f" ] || { echo "missing $BIN/$f" >&2; exit 1; }
 done
-for m in face_detection_yunet_2023mar.onnx face_recognition_sface_2021dec.onnx; do
+for m in face_detection_yunet_2023mar.onnx face_recognition_sface_2021dec.onnx open_closed_eye.onnx; do
   [ -f "$MODEL_DIR/$m" ] || { echo "missing model $MODEL_DIR/$m (run packaging/fetch-models.sh)" >&2; exit 1; }
 done
 
@@ -50,7 +50,8 @@ stage() {
   install -Dm755 "$BIN/frogger" "$r/usr/bin/frogger"
   install -Dm644 "$BIN/libpam_frogger.so" "$r$pamdir/pam_frogger.so"
   install -Dm644 -t "$r/usr/share/frogger/models" \
-    "$MODEL_DIR/face_detection_yunet_2023mar.onnx" "$MODEL_DIR/face_recognition_sface_2021dec.onnx"
+    "$MODEL_DIR/face_detection_yunet_2023mar.onnx" "$MODEL_DIR/face_recognition_sface_2021dec.onnx" \
+    "$MODEL_DIR/open_closed_eye.onnx"
   install -Dm644 "$ROOT/packaging/config.toml" "$r/usr/share/frogger/config.toml.example"
   install -d "$r/usr/share/frogger/pam.d"
   sed "s/@ACCOUNT@/$account/" "$ROOT/packaging/pam.d/kde-face" > "$r/usr/share/frogger/pam.d/kde-face"
@@ -109,7 +110,8 @@ install -Dm755 "$BIN/froggerd" "$T/libexec/froggerd"
 install -Dm755 "$BIN/frogger-askpass" "$T/libexec/frogger-askpass"
 install -Dm644 "$BIN/libpam_frogger.so" "$T/lib/pam_frogger.so"
 install -Dm644 -t "$T/share/models" \
-  "$MODEL_DIR/face_detection_yunet_2023mar.onnx" "$MODEL_DIR/face_recognition_sface_2021dec.onnx"
+  "$MODEL_DIR/face_detection_yunet_2023mar.onnx" "$MODEL_DIR/face_recognition_sface_2021dec.onnx" \
+    "$MODEL_DIR/open_closed_eye.onnx"
 install -Dm644 "$ROOT/packaging/config.toml" "$T/share/config.toml.example"
 install -Dm644 "$ROOT/packaging/pam.d/kde-face" "$T/share/pam.d/kde-face"
 install -Dm644 -t "$T/systemd" "$ROOT/packaging/systemd/frogger.socket" "$ROOT/packaging/systemd/frogger.service" \

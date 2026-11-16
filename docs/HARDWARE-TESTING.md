@@ -27,8 +27,10 @@ Blink slowly (≈ ½ s) as the prompt asks; additionally try quick natural
 blinks and note how often they are detected together with the frame rate
 reported by `frogger doctor`.
 
-Record `best_similarity`, `matching_frames`, `blink_detected`, `eye_samples`,
-`max_eye_dip`, `max_closed_rise` and the time to
+Record `best_similarity`, `matching_frames`, `blink_detected`, `blink_method`
+(`patch` = calibrated eye patches, `model` = eye state model), `eye_samples`,
+`max_eye_dip`, `max_closed_rise`, `model_max_closed`, `model_min_open`,
+`model_blink_phase` and the time to
 success. Target: ≥ 95 % success within the 5 s budget (4 s at display
 managers and lock screens, see `auth.service_timeouts`). If genuine users stay
 below the threshold, re-enroll in the typical working position before

@@ -6,9 +6,16 @@
 |---|---|---|---|
 | `face_detection_yunet_2023mar.onnx` | Face detection + 5 landmarks (YuNet) | [OpenCV Zoo](https://huggingface.co/opencv/face_detection_yunet) | MIT, © 2020 Shiqi Yu |
 | `face_recognition_sface_2021dec.onnx` | 128-d face embeddings (SFace) | [OpenCV Zoo](https://huggingface.co/opencv/face_recognition_sface) | Apache-2.0 |
+| `open_closed_eye.onnx` | Eye state open/closed (`open-closed-eye-0001`) | [Intel Open Model Zoo](https://github.com/openvinotoolkit/open_model_zoo/tree/master/models/public/open-closed-eye-0001) | Apache-2.0 (OpenVINO Training Extensions) |
 
-Both licenses allow commercial use and redistribution. `packaging/fetch-models.sh`
+All licenses allow commercial use and redistribution. `packaging/fetch-models.sh`
 pins the files by SHA-256.
+
+The eye state model was trained by Intel on the
+[MRL Eye Dataset](https://mrl.cs.vsb.cz/eyedataset.html) (infrared eye images,
+Media Research Lab, VŠB – Technical University of Ostrava; R. Fusek, "Pupil
+localization using geodesic distance", ISVC 2018). The dataset itself is not
+used or redistributed by FROGGER.
 
 Models that were evaluated and **not** used:
 
