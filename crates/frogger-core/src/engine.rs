@@ -7,7 +7,7 @@ use crate::camera::{self, Camera, CameraKind};
 use crate::config::{Config, DepthMode, LivenessMode};
 use crate::store::{self, Sample, Store, UserTemplate, FORMAT_VERSION};
 use crate::vision::eyes::{average, EyeCalibration, EyePair};
-use crate::vision::{self, Analysis, Pipeline};
+use crate::vision::{self, Analysis, Image, Pipeline};
 use anyhow::Result;
 use frogger_i18n::tr;
 use frogger_proto::Cue;
@@ -48,6 +48,9 @@ const CLOSE_TRIES: usize = 3;
 /// Reaction time after the prompt: frames in this window are ignored.
 const CLOSE_GRACE: Duration = Duration::from_millis(500);
 const CLOSED_RECORD: Duration = Duration::from_millis(1000);
+/// How long after the last detected face its position is still used to
+/// measure the eyes when the detector loses the face (closed eyes).
+const EYES_ONLY_MAX: Duration = Duration::from_millis(1500);
 const MIN_CLOSED: usize = 4;
 /// After "open your eyes": wait at most this long for open eyes.
 const OPEN_WAIT: Duration = Duration::from_secs(5);
@@ -440,14 +443,15 @@ impl Engine {
     }
 
     /// Next frame usable for enrollment: lit by the emitter, exactly one face,
-    /// large and bright enough. Rejected frames are counted in `rejects`.
+    /// large and bright enough. Rejected frames are counted in `rejects`; a
+    /// lit frame without a detected face is returned as `Seen::NoFace`.
     fn enroll_frame(
         &self,
         cam: &mut Camera,
         infrared: bool,
         strobe: &mut StrobeFilter,
         rejects: &mut Rejects,
-    ) -> Option<Analysis> {
+    ) -> Option<Seen> {
         let Ok(frame) = cam.frame() else {
             rejects.capture += 1;
             return None;
@@ -458,7 +462,7 @@ impl Engine {
         }
         let Some(a) = self.models().ok()?.pipeline.analyse(&frame.image).ok().flatten() else {
             rejects.no_face += 1;
-            return None;
+            return Some(Seen::NoFace(frame.image));
         };
         if a.face_count > 1 {
             rejects.multiple += 1;
@@ -472,7 +476,7 @@ impl Engine {
             rejects.dark += 1;
             return None;
         }
-        Some(a)
+        Some(Seen::Face(Box::new(a)))
     }
 
     /// Determine camera type from probe + a short capture.
@@ -553,21 +557,24 @@ impl Engine {
         let mut hinted_multi = false;
         // Frames without a usable face, by reason (diagnostics).
         let rejected = std::cell::Cell::new(Rejects::default());
-        // Next usable frame, or None when `limit` has passed. Emits a hint
-        // when no face was seen for a while.
+        // Next usable frame, or None when `limit` has passed. Lit frames
+        // without a detected face are returned only with `faceless`. Emits a
+        // hint when no face was seen for a while.
         let mut next = |cam: &mut Camera,
                         since: Instant,
                         limit: Duration,
+                        faceless: bool,
                         emit: Emit,
                         cue: &mut dyn FnMut(Signal)|
-         -> Option<Analysis> {
+         -> Option<Seen> {
             let last_face = Instant::now();
             while since.elapsed() < limit {
                 let r = self.enroll_frame(cam, infrared, &mut strobe, &mut rejects);
                 rejected.set(rejects);
                 match r {
-                    Some(a) => return Some(a),
-                    None => {
+                    Some(Seen::Face(a)) => return Some(Seen::Face(a)),
+                    Some(Seen::NoFace(img)) if faceless => return Some(Seen::NoFace(img)),
+                    _ => {
                         if !hinted_multi && rejects.multiple >= 5 {
                             hinted_multi = true;
                             emit(tr(lang, "enroll.multiple_faces", &[]));
@@ -593,7 +600,7 @@ impl Engine {
         let mut frontal: Vec<Analysis> = Vec::new();
         let mut last_kept = step - SAMPLE_INTERVAL;
         while frontal.len() < FRONTAL_SAMPLES {
-            let Some(a) = next(&mut cam, step, STEP_LIMIT, emit, cue) else {
+            let Some(a) = next(&mut cam, step, STEP_LIMIT, false, emit, cue).and_then(Seen::face) else {
                 return Outcome::Failure(tr(lang, "enroll.no_face", &[]));
             };
             // The person is still reading the prompt (looking at the text,
@@ -625,7 +632,7 @@ impl Engine {
         let mut hinted_other = false;
         let mut last_kept = step - SAMPLE_INTERVAL;
         while !(left.is_some() && right.is_some()) {
-            let Some(a) = next(&mut cam, step, TURN_LIMIT, emit, cue) else {
+            let Some(a) = next(&mut cam, step, TURN_LIMIT, false, emit, cue).and_then(Seen::face) else {
                 break;
             };
             let d = yaw(&a.face) - base_yaw;
@@ -701,9 +708,18 @@ impl Engine {
             vision::cosine(&a.embedding, &mean) >= CLOSED_MIN_IDENTITY
                 && (yaw(&a.face) - base_yaw).abs() < CLOSED_MAX_YAW
         };
+        // Closed frames are kept across attempts: each was checked on its own.
         let mut closed: Vec<(f32, EyePair)> = Vec::new();
         let mut lowest = f32::INFINITY;
-        let (mut seen, mut other_person, mut turned_away) = (0u32, 0u32, 0u32);
+        let (mut seen, mut other_person, mut turned_away, mut eyes_only) = (0u32, 0u32, 0u32, 0u32);
+        // Last usable face: the detector often loses a face with closed eyes
+        // (field test: about a third of the frames), so for a short time the
+        // eyes are measured where it was last.
+        let mut last: Option<(Instant, Box<Analysis>)> = None;
+        let pipeline = match self.models() {
+            Ok(m) => &m.pipeline,
+            Err(_) => return Outcome::Unavailable(tr(lang, "auth.camera_unavailable", &[])),
+        };
         let rejected_before = rejected.get();
         for attempt in 0..CLOSE_TRIES {
             let key = if attempt == 0 {
@@ -714,13 +730,47 @@ impl Engine {
             emit(tr(lang, key, &[]));
             cue(Signal::Say(key));
             flush(&mut cam);
-            closed.clear();
             let step = Instant::now();
             let mut closed_since: Option<Instant> = None;
-            while let Some(a) = next(&mut cam, step, CLOSE_TRY, emit, cue) {
+            while let Some(seen_frame) = next(&mut cam, step, CLOSE_TRY, true, emit, cue) {
                 if step.elapsed() < CLOSE_GRACE {
+                    // Not measured yet, but the face position is remembered
+                    // (people often close their eyes while the prompt plays).
+                    if let Seen::Face(a) = seen_frame {
+                        if vision::cosine(&a.embedding, &mean) >= CLOSED_MIN_IDENTITY && usable(&a) {
+                            last = Some((Instant::now(), a));
+                        }
+                    }
                     continue;
                 }
+                let a = match seen_frame {
+                    Seen::Face(a) => a,
+                    Seen::NoFace(img) => {
+                        let Some((_, prev)) = last.as_ref().filter(|(at, _)| at.elapsed() <= EYES_ONLY_MAX)
+                        else {
+                            continue;
+                        };
+                        let sample = pipeline.eye_sample(&img, prev);
+                        // Same place, same light: the face is still there.
+                        let ratio = sample.face_brightness / prev.face_brightness.max(1.0);
+                        if !(0.8..=1.25).contains(&ratio) {
+                            continue;
+                        }
+                        let sim = both_sim(&sample.eyes);
+                        lowest = lowest.min(sim);
+                        if sim < closed_below {
+                            eyes_only += 1;
+                            closed_since.get_or_insert_with(Instant::now);
+                            closed.push((sim, sample.eyes));
+                        }
+                        if closed_since.is_some_and(|t| t.elapsed() >= CLOSED_RECORD)
+                            && closed.len() >= MIN_CLOSED
+                        {
+                            break;
+                        }
+                        continue;
+                    }
+                };
                 seen += 1;
                 if vision::cosine(&a.embedding, &mean) < CLOSED_MIN_IDENTITY {
                     other_person += 1;
@@ -730,11 +780,12 @@ impl Engine {
                     turned_away += 1;
                     continue;
                 }
+                last = Some((Instant::now(), a.clone()));
                 let sim = both_sim(&a.eyes);
                 lowest = lowest.min(sim);
                 if sim < closed_below {
                     closed_since.get_or_insert_with(Instant::now);
-                    closed.push((sim, a.eyes));
+                    closed.push((sim, a.eyes.clone()));
                 } else if eye_sim(&a.eyes) >= open_floor && closed.len() >= MIN_CLOSED {
                     break; // eyes opened again after enough closed frames
                 }
@@ -749,7 +800,8 @@ impl Engine {
         log::info!(
             "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
              {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {:?}, \
-             other identity {other_person}, head turned {turned_away})",
+             other identity {other_person}, head turned {turned_away}, closed at the last face \
+             position {eyes_only})",
             closed.len(),
             rejected.get().since(&rejected_before)
         );
@@ -767,7 +819,7 @@ impl Engine {
         emit(tr(lang, "enroll.open_eyes", &[]));
         cue(Signal::Say("enroll.open_eyes"));
         let step = Instant::now();
-        while let Some(a) = next(&mut cam, step, OPEN_WAIT, emit, cue) {
+        while let Some(a) = next(&mut cam, step, OPEN_WAIT, false, emit, cue).and_then(Seen::face) {
             if usable(&a) && eye_sim(&a.eyes) >= open_floor {
                 break;
             }
@@ -873,6 +925,21 @@ pub fn kind_name(k: CameraKind) -> &'static str {
 }
 
 /// Why frames were not usable during enrollment (diagnostics).
+/// A lit enrollment frame: with a usable face, or without any detected face.
+enum Seen {
+    Face(Box<Analysis>),
+    NoFace(Image),
+}
+
+impl Seen {
+    fn face(self) -> Option<Analysis> {
+        match self {
+            Seen::Face(a) => Some(*a),
+            Seen::NoFace(_) => None,
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default)]
 struct Rejects {
     capture: u32,
