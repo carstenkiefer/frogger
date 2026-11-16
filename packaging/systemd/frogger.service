@@ -32,6 +32,10 @@ IPAddressDeny=any
 RestrictAddressFamilies=AF_UNIX
 DevicePolicy=closed
 DeviceAllow=char-video4linux rw
+# systemd <= 255 decrypts ImportCredential= inside this device policy: the
+# TPM must be reachable for that step. The daemon itself runs as "frogger"
+# and cannot open /dev/tpmrm0 (root:tss 0660) anyway.
+DeviceAllow=/dev/tpmrm0 rw
 ProtectKernelTunables=yes
 ProtectKernelModules=yes
 ProtectKernelLogs=yes
