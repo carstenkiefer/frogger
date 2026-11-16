@@ -202,9 +202,10 @@ pub struct LivenessConfig {
     /// Reject frames with more than one face (prevents a second person or a
     /// photo next to the user from contributing).
     pub reject_multiple_faces: bool,
-    /// Also detect blinks with the eye-state model (open/closed per eye,
-    /// trained on infrared images) when it is installed. A blink detected by
-    /// either method counts; both require open → closed → open on both eyes.
+    /// EXPERIMENTAL: also detect blinks with the eye-state model (open/closed
+    /// per eye, trained on infrared images) when it is installed. Field test:
+    /// on a laptop IR camera it rated open eyes as closed most of the time,
+    /// so it is off by default. A blink detected by either method counts.
     pub eye_model: bool,
 }
 
@@ -216,7 +217,7 @@ impl Default for LivenessConfig {
             min_ir_face_brightness: 25.0,
             min_track_iou: 0.45,
             reject_multiple_faces: true,
-            eye_model: true,
+            eye_model: false,
         }
     }
 }
