@@ -18,6 +18,8 @@ const SIZE: usize = 32;
 /// eye distance is ~35): the eye with lids and a little skin around it, like
 /// the training images.
 const CROP: f32 = 30.0;
+/// Crop sides evaluated in the debug log.
+const DEBUG_SIDES: [f32; 5] = [16.0, 20.0, 24.0, 30.0, 38.0];
 
 pub struct EyeStateModel {
     model: std::sync::Arc<TypedRunnableModel>,
@@ -38,10 +40,35 @@ impl EyeStateModel {
     /// Probability that each eye (image-left, image-right) is closed.
     /// `fwd` maps image → aligned-template coordinates.
     pub fn closed(&self, img: &Image, fwd: &Similarity) -> Result<[f32; 2]> {
+        if log::log_enabled!(log::Level::Debug) {
+            self.log_scales(img, fwd);
+        }
         Ok([
-            self.closed_prob(&crop(img, fwd, TEMPLATE[0]))?,
-            self.closed_prob(&crop(img, fwd, TEMPLATE[1]))?,
+            self.closed_prob(&crop(img, fwd, TEMPLATE[0], CROP))?,
+            self.closed_prob(&crop(img, fwd, TEMPLATE[1], CROP))?,
         ])
+    }
+
+    /// Diagnostics (debug log only): the closed probability at several crop
+    /// sizes, to find the framing that matches a camera.
+    fn log_scales(&self, img: &Image, fwd: &Similarity) {
+        let mut line = String::new();
+        for side in DEBUG_SIDES {
+            let p = |c| self.closed_prob(&crop(img, fwd, c, side)).unwrap_or(f32::NAN);
+            line.push_str(&format!(" {side:.0}:{:.2}/{:.2}", p(TEMPLATE[0]), p(TEMPLATE[1])));
+        }
+        // Same at the default size with the contrast stretched to 0..255.
+        let q = |c| {
+            let mut v = crop(img, fwd, c, CROP);
+            stretch(&mut v);
+            self.closed_prob(&v).unwrap_or(f32::NAN)
+        };
+        line.push_str(&format!(
+            " {CROP:.0}n:{:.2}/{:.2}",
+            q(TEMPLATE[0]),
+            q(TEMPLATE[1])
+        ));
+        log::debug!("eye model scales{line}");
     }
 
     fn closed_prob(&self, gray: &[f32]) -> Result<f32> {
@@ -65,11 +92,23 @@ fn softmax2(open: f32, closed: f32) -> f32 {
     c / (o + c)
 }
 
+/// Stretch normalised values to the full range (diagnostics).
+fn stretch(v: &mut [f32]) {
+    let (lo, hi) = v
+        .iter()
+        .fold((f32::MAX, f32::MIN), |(l, h), &x| (l.min(x), h.max(x)));
+    if hi - lo > 1e-3 {
+        for x in v.iter_mut() {
+            *x = ((*x - lo) / (hi - lo) * 255.0 - 127.0) / 255.0;
+        }
+    }
+}
+
 /// Upright, normalised 32x32 grayscale crop around a template eye position.
-fn crop(img: &Image, fwd: &Similarity, center: [f32; 2]) -> Vec<f32> {
+fn crop(img: &Image, fwd: &Similarity, center: [f32; 2], side: f32) -> Vec<f32> {
     let inv = fwd.inverse();
-    let step = CROP / SIZE as f32;
-    let (ox, oy) = (center[0] - CROP / 2.0, center[1] - CROP / 2.0);
+    let step = side / SIZE as f32;
+    let (ox, oy) = (center[0] - side / 2.0, center[1] - side / 2.0);
     let mut v = Vec::with_capacity(SIZE * SIZE);
     for r in 0..SIZE {
         for c in 0..SIZE {
@@ -103,7 +142,7 @@ mod tests {
         // Identity transform: template coordinates are image coordinates.
         let id = Similarity::estimate(&TEMPLATE, &TEMPLATE);
         let img = Image::from_gray(112, 112, vec![127; 112 * 112]);
-        let c = crop(&img, &id, TEMPLATE[0]);
+        let c = crop(&img, &id, TEMPLATE[0], CROP);
         assert_eq!(c.len(), SIZE * SIZE);
         assert!(c.iter().all(|v| v.abs() < 0.01));
     }
