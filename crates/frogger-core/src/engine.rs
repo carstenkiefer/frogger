@@ -51,6 +51,11 @@ const CLOSED_RECORD: Duration = Duration::from_millis(1000);
 /// How long after the last detected face its position is still used to
 /// measure the eyes when the detector loses the face (closed eyes).
 const EYES_ONLY_MAX: Duration = Duration::from_millis(1500);
+/// Eye calibration margin below which the close-eyes step is repeated
+/// (field values: 0.20–0.25 for clearly closed eyes, 0.10 when the frames
+/// were taken while the eyes were still closing). After the last attempt the
+/// best calibration is used anyway.
+const ENROLL_MIN_MARGIN: f32 = 0.15;
 const MIN_CLOSED: usize = 4;
 /// After "open your eyes": wait at most this long for open eyes.
 const OPEN_WAIT: Duration = Duration::from_secs(5);
@@ -716,6 +721,9 @@ impl Engine {
         // (field test: about a third of the frames), so for a short time the
         // eyes are measured where it was last.
         let mut last: Option<(Instant, Box<Analysis>)> = None;
+        // Best eye calibration so far (highest margin).
+        let mut best: Option<EyeCalibration> = None;
+        let mut enough_closed = false;
         let pipeline = match self.models() {
             Ok(m) => &m.pipeline,
             Err(_) => return Outcome::Unavailable(tr(lang, "auth.camera_unavailable", &[])),
@@ -793,24 +801,46 @@ impl Engine {
                     break;
                 }
             }
-            if closed.len() >= MIN_CLOSED {
+            if closed.len() < MIN_CLOSED {
+                continue;
+            }
+            log::info!(
+                "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
+                 {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {:?}, \
+                 other identity {other_person}, head turned {turned_away}, closed at the last face \
+                 position {eyes_only})",
+                closed.len(),
+                rejected.get().since(&rejected_before)
+            );
+            // Only the clearest closed frames become the reference: frames
+            // taken while the lids were still moving would blur it.
+            closed.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let keep = (closed.len().div_ceil(2)).max(MIN_CLOSED).min(closed.len());
+            let refs: Vec<EyePair> = closed.iter().take(keep).map(|(_, e)| e.clone()).collect();
+            let cal = EyeCalibration::from_samples(&open_eyes, &refs);
+            let margin = cal.as_ref().map_or(0.0, |c| c.margin);
+            enough_closed = true;
+            if cal.is_some() && best.as_ref().is_none_or(|b: &EyeCalibration| margin > b.margin) {
+                best = cal;
+            }
+            if margin >= ENROLL_MIN_MARGIN {
                 break;
             }
+            // Weak separation: usually frames taken while the eyes were
+            // still closing (field test with a strobing emitter, where few
+            // frames are lit). Try again with fresh frames.
+            log::info!("enrollment of {user}: eye calibration too weak (margin {margin:.3}), retrying");
+            closed.clear();
         }
-        log::info!(
-            "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
-             {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {:?}, \
-             other identity {other_person}, head turned {turned_away}, closed at the last face \
-             position {eyes_only})",
-            closed.len(),
-            rejected.get().since(&rejected_before)
-        );
-        // Only the clearest closed frames become the reference: frames taken
-        // while the lids were still moving would blur it.
-        closed.sort_by(|a, b| a.0.total_cmp(&b.0));
-        let keep = (closed.len().div_ceil(2)).max(MIN_CLOSED).min(closed.len());
-        let closed: Vec<EyePair> = closed.into_iter().take(keep).map(|(_, e)| e).collect();
-        if closed.len() < MIN_CLOSED {
+        if !enough_closed {
+            log::info!(
+                "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
+                 {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {:?}, \
+                 other identity {other_person}, head turned {turned_away}, closed at the last face \
+                 position {eyes_only})",
+                closed.len(),
+                rejected.get().since(&rejected_before)
+            );
             return Outcome::Failure(tr(lang, "enroll.calibration_failed", &[]));
         }
         // Step 4: open the eyes again; wait until they are (so the
@@ -824,7 +854,7 @@ impl Engine {
                 break;
             }
         }
-        let eyes = EyeCalibration::from_samples(&open_eyes, &closed);
+        let eyes = best;
         if eyes.is_none() && (self.cfg.effective_liveness() == LivenessMode::Blink || !infrared) {
             return Outcome::Failure(tr(lang, "enroll.calibration_failed", &[]));
         }
