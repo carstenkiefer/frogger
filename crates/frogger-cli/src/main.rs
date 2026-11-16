@@ -471,7 +471,8 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
     if camera::lid_closed() == Some(true) {
         println!("(!) {}", tr(lang, "cli.doctor.lid_closed", &[]));
     }
-    match call(socket, Op::Status, lang) {
+    let status = call(socket, Op::Status, lang);
+    match &status {
         Ok((_, _, Some(d))) => println!(
             "✔ {}",
             tr(
@@ -481,7 +482,12 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
             )
         ),
         Ok(_) => {}
-        Err(e) => println!("✘ {e:#}"),
+        Err(e) => {
+            println!("✘ {e:#}");
+            if let Some(hint) = service_failure_hint(lang) {
+                println!("  {hint}");
+            }
+        }
     }
     println!("  {}", pam_status_text(lang));
     let others = other_face_modules();
@@ -495,23 +501,17 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
             )
         );
     }
-    let encrypted = call(socket, Op::Status, lang)
-        .ok()
-        .and_then(|(_, _, d)| d)
-        .and_then(|d| d["template_encryption"].as_bool())
-        .unwrap_or(false);
-    println!(
-        "  {}",
-        tr(
-            lang,
-            if encrypted {
-                "cli.doctor.encryption_on"
-            } else {
-                "cli.doctor.encryption_off"
-            },
-            &[]
-        )
-    );
+    let encryption = match &status {
+        Ok((_, _, Some(d))) => d["template_encryption"].as_bool(),
+        _ => None, // daemon not reachable: it decides, we cannot tell
+    };
+    let key = match encryption {
+        Some(true) => "cli.doctor.encryption_on",
+        Some(false) => "cli.doctor.encryption_off",
+        None if Path::new(CREDSTORE).join("frogger.key").exists() => "cli.doctor.encryption_unknown",
+        None => "cli.doctor.encryption_off",
+    };
+    println!("  {}", tr(lang, key, &[]));
     let desktop = std::env::var("XDG_CURRENT_DESKTOP")
         .unwrap_or_default()
         .to_lowercase();
@@ -599,6 +599,31 @@ fn setup(config: &Path, socket: &str, accept_rgb: bool, no_enroll: bool, lang: &
 }
 
 const CREDSTORE: &str = "/etc/credstore.encrypted";
+
+/// Why frogger.service failed to start, if systemd recorded a failure.
+fn service_failure_hint(lang: &str) -> Option<String> {
+    let out = std::process::Command::new("systemctl")
+        .args(["show", "frogger.service", "-p", "Result", "-p", "ExecMainStatus"])
+        .output()
+        .ok()?;
+    let text = String::from_utf8_lossy(&out.stdout);
+    let value = |k: &str| {
+        text.lines()
+            .find_map(|l| l.strip_prefix(k)?.strip_prefix('='))
+            .unwrap_or("")
+            .to_string()
+    };
+    let (result, status) = (value("Result"), value("ExecMainStatus"));
+    if result.is_empty() || result == "success" {
+        return None;
+    }
+    // 243 = EXIT_CREDENTIALS: the template key could not be decrypted.
+    Some(if status == "243" {
+        tr(lang, "cli.doctor.daemon_credentials", &[])
+    } else {
+        tr(lang, "cli.doctor.daemon_failed", &[("result", &result)])
+    })
+}
 
 /// systemd major version (`systemctl --version`).
 fn systemd_version() -> Option<u32> {
