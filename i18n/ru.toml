@@ -51,6 +51,7 @@
 "cli.doctor.policy" = "Политика: небезопасный RGB разрешён: {rgb}, устройство с конфиденциальными данными: {sensitive}"
 "cli.doctor.models_missing" = "Отсутствует файл модели: {path}"
 "cli.doctor.emitter_dark" = "Инфракрасное изображение почти чёрное: вероятно, ИК-излучатель выключен. Настройте его с помощью linux-enable-ir-emitter и импортируйте результат: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.virtual_camera" = "Виртуальная камера ({reason}): игнорируется, так как любая программа может подавать в неё изображения"
 "cli.doctor.other_face_module" = "Howdy также активен в конфигурации PAM ({files}). Два модуля распознавания лица конкурируют за ИК-камеру и работают друг за другом – удалите Howdy (например, sudo apt remove howdy) или отключите FROGGER."
 "cli.doctor.depth_found" = "Найден датчик глубины: {name} ({device}) – экспериментальная проверка глубины: {mode}"
 "cli.doctor.lid_closed" = "Крышка ноутбука закрыта – камера вас не видит."

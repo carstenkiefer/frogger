@@ -51,6 +51,7 @@
 "cli.doctor.policy" = "السياسة: السماح بـ RGB غير الآمن: {rgb}، جهاز حساس: {sensitive}"
 "cli.doctor.models_missing" = "ملف النموذج مفقود: {path}"
 "cli.doctor.emitter_dark" = "صورة الأشعة تحت الحمراء شبه سوداء: يبدو أن باعث الأشعة تحت الحمراء مطفأ. اضبطه باستخدام linux-enable-ir-emitter ثم استورد النتيجة: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.virtual_camera" = "كاميرا افتراضية ({reason}): تم تجاهلها، لأن أي برنامج يمكنه تزويدها بالصور"
 "cli.doctor.other_face_module" = "Howdy مفعّل أيضًا في إعدادات PAM ({files}). تتنافس وحدتا تعرّف على الوجه على كاميرا الأشعة تحت الحمراء وتعملان الواحدة تلو الأخرى – أزل Howdy (مثلًا sudo apt remove howdy) أو عطّل FROGGER."
 "cli.doctor.depth_found" = "تم العثور على مستشعر عمق: {name} ({device}) – فحص العمق التجريبي: {mode}"
 "cli.doctor.lid_closed" = "غطاء الحاسوب المحمول مغلق – لا تستطيع الكاميرا رؤيتك."

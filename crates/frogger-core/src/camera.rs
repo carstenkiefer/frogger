@@ -47,6 +47,10 @@ pub struct CameraInfo {
     pub kind: CameraKind,
     /// Depth sensor node (delivers Z16 depth maps).
     pub depth: bool,
+    /// Why this is a virtual camera (v4l2loopback etc.) rather than real
+    /// hardware; `None` for real devices. Any program with write access to
+    /// a virtual camera can feed it arbitrary images.
+    pub virtual_reason: Option<String>,
     /// Human readable reasons for the classification.
     pub evidence: Vec<String>,
 }
@@ -129,7 +133,9 @@ pub fn probe(path: &Path) -> Result<CameraInfo> {
         evidence.push("colour-only pixel formats".into());
         CameraKind::Rgb
     };
+    let virtual_reason = virtual_camera(&caps.driver, &caps.bus, sysfs_device(path).as_deref());
     Ok(CameraInfo {
+        virtual_reason,
         stable_path: stable_alias(path),
         usb_id: usb_id(path),
         path: path.to_path_buf(),
@@ -141,6 +147,50 @@ pub fn probe(path: &Path) -> Result<CameraInfo> {
         depth,
         evidence,
     })
+}
+
+/// V4L2 drivers that produce images in software instead of reading a sensor.
+const VIRTUAL_DRIVERS: [&str; 7] = [
+    "v4l2 loopback",
+    "v4l2loopback",
+    "vivid",
+    "vimc",
+    "akvcam",
+    "vicodec",
+    "visl",
+];
+
+/// Why a device is a virtual camera, or `None` for real hardware.
+///
+/// Checked: the driver name, the bus info, and where the device sits in
+/// sysfs – v4l2loopback devices are not attached to any bus and live under
+/// `/sys/devices/virtual/`.
+fn virtual_camera(driver: &str, bus: &str, sysfs: Option<&Path>) -> Option<String> {
+    let driver_l = driver.trim().to_lowercase();
+    if let Some(d) = VIRTUAL_DRIVERS
+        .iter()
+        .find(|d| driver_l == **d || driver_l.starts_with(*d))
+    {
+        return Some(format!("driver '{d}'"));
+    }
+    let bus_l = bus.to_lowercase();
+    if ["loopback", "vivid", "akvcam", "vimc"]
+        .iter()
+        .any(|m| bus_l.contains(m))
+    {
+        return Some(format!("bus '{bus}'"));
+    }
+    if sysfs.is_some_and(|p| p.starts_with("/sys/devices/virtual")) {
+        return Some("not attached to any hardware bus".into());
+    }
+    None
+}
+
+/// Real sysfs path of the device behind a /dev/videoN node.
+fn sysfs_device(path: &Path) -> Option<PathBuf> {
+    let real = std::fs::canonicalize(path).ok()?;
+    let node = real.file_name()?.to_str()?.to_owned();
+    std::fs::canonicalize(format!("/sys/class/video4linux/{node}")).ok()
 }
 
 /// `/dev/v4l/by-id/*` alias pointing at `path`.
@@ -217,6 +267,13 @@ impl Camera {
     pub fn open(cfg: &CameraConfig) -> Result<Camera> {
         let path = resolve_device(cfg)?;
         let info = probe(&path)?;
+        if let (Some(reason), false) = (&info.virtual_reason, cfg.allow_virtual) {
+            bail!(
+                "{} is a virtual camera ({reason}): any program could feed it images. \
+                 Refused unless policy.allow_virtual_camera = true (testing only).",
+                path.display()
+            );
+        }
         if let Some(expected) = &cfg.expected_usb_id {
             if info.usb_id.as_deref() != Some(expected.as_str()) {
                 bail!(
@@ -297,6 +354,7 @@ fn resolve_device(cfg: &CameraConfig) -> Result<PathBuf> {
     let candidates: Vec<&CameraInfo> = cams
         .iter()
         .filter(|c| !c.depth)
+        .filter(|c| cfg.allow_virtual || c.virtual_reason.is_none())
         .filter(|c| cfg.expected_usb_id.is_none() || c.usb_id == cfg.expected_usb_id)
         .collect();
     let best = candidates
@@ -318,7 +376,13 @@ fn resolve_device(cfg: &CameraConfig) -> Result<PathBuf> {
 /// node of the same USB device (Intel RealSense exposes IR and depth there).
 pub fn find_depth_camera(cfg: &DepthConfig, ir: &CameraInfo) -> Option<PathBuf> {
     if cfg.device != "auto" {
-        return Some(PathBuf::from(&cfg.device));
+        let p = PathBuf::from(&cfg.device);
+        // A virtual depth node could fake relief just as easily.
+        if probe(&p).is_ok_and(|i| i.virtual_reason.is_some() && ir.virtual_reason.is_none()) {
+            log::warn!("{} is a virtual camera, not used as depth sensor", p.display());
+            return None;
+        }
+        return Some(p);
     }
     ir.usb_id.as_ref()?;
     list_cameras()
@@ -722,6 +786,23 @@ pub fn import_emitter_config(src: &str) -> Result<Vec<EmitterControl>> {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn virtual_cameras_are_recognised() {
+        let p = |s: &str| Some(PathBuf::from(s));
+        // v4l2loopback (also used by OBS and Intel's IPU6 relay)
+        assert!(virtual_camera("v4l2 loopback", "platform:v4l2loopback-000", None).is_some());
+        assert!(virtual_camera("v4l2loopback", "", None).is_some());
+        // Kernel test drivers and the akvcam virtual camera
+        assert!(virtual_camera("vivid", "platform:vivid-000", None).is_some());
+        assert!(virtual_camera("akvcam", "akvcam", None).is_some());
+        // Unknown driver, but not attached to any bus
+        assert!(virtual_camera("foo", "", p("/sys/devices/virtual/video4linux/video9").as_deref()).is_some());
+        // Real UVC camera
+        let uvc = p("/sys/devices/pci0000:00/0000:00:08.1/0000:63:00.4/usb3/3-1/3-1:1.2/video4linux/video2");
+        assert!(virtual_camera("uvcvideo", "usb-0000:63:00.4-1", uvc.as_deref()).is_none());
+    }
+
     use super::*;
 
     #[test]

@@ -41,7 +41,6 @@ fixes always come first.
   image follow a single planar transformation (homography); a real head does
   not (nose vs. cheeks). Targets the "photo with cut-out eyes" attack, which
   a blink challenge alone does not stop.
-* Reject virtual cameras (v4l2loopback etc.) unless explicitly allowed.
 
 **Test data** (see [policy](#test-data-policy))
 * `frogger doctor --record`: records per-frame *measurements* (glint

@@ -13,6 +13,46 @@ against.
 3. Failure of any component must fall back to the password, never to "allow".
 4. Biometric data stays on the device and is accessible to the daemon only.
 
+## Threat model in short
+
+Face login is a **convenience** method with a reasonable bar, not a
+replacement for a strong password where the stakes are high. The password
+always keeps working and stays the stronger factor.
+
+**Designed to stop** the casual or opportunistic attacker – a colleague, a
+flatmate, a thief, someone with your photo:
+
+* photos and videos on a phone, tablet or monitor (screens are dark in
+  near-infrared, so a blinking video does not help either);
+* ordinary printed photos, including prints of your social-media pictures:
+  skin, eyes and hair look different in near-infrared, and a print cannot
+  blink;
+* someone using your face while you are logged in remotely, or another
+  local user probing your face;
+* virtual cameras fed with images by a program.
+
+**Not designed to stop** a determined attacker who prepares an attack on
+you in particular:
+
+* an **infrared photo of you**, taken up close with an IR camera and printed
+  well – combined with cut-out eyes, behind which real eyes blink (see
+  residual risks; a parallax check against this is planned);
+* **3D masks**: a plain 2D camera, IR or not, cannot reliably reject a
+  well-made mask. Only real depth sensing (like Face ID's structured light)
+  does, and FROGGER's depth support is experimental;
+* a **malicious USB device** posing as your camera;
+* **twins** and very similar relatives.
+
+**Why IR matters:** the material for an RGB attack – your photos – is
+everywhere, and showing one on a phone takes seconds. Infrared images of you
+are rare; an attacker has to get close to you with an IR camera first. IR
+does not make face login unbreakable, it removes the cheap attacks. The same
+holds for Windows Hello on devices without depth sensors: it was fooled with
+a printed near-infrared photo (SySS, 2017) and with a USB device posing as an
+IR camera (CyberArk, 2021, CVE-2021-34466). Android classifies plain RGB face
+unlock on many phones as a weak or convenience-level biometric that may not
+authorise payments.
+
 ## Layers
 
 | Attack | Countermeasure |
@@ -24,6 +64,7 @@ against.
 | Second person / photo next to the user | Frames with more than one face are discarded (`reject_multiple_faces`). |
 | Brute force / lookalikes | Strict similarity threshold, several matching frames required, lockout after `max_failures` (falls back to password). |
 | Camera replaced by another device | Camera pinning by USB vendor:product (`expected_usb_id`, written by `frogger setup`); templates remember the camera type. |
+| Images injected via a virtual camera (v4l2loopback, OBS, vivid, akvcam …) | Virtual cameras are detected by driver, bus info and their place in sysfs (not attached to any hardware bus) and are never used unless `policy.allow_virtual_camera = true` (testing only, ignored on sensitive devices). `frogger doctor` lists them as ignored. |
 | Remote attacker runs `sudo`/`su`/`pkexec` while the user sits at the desk | The daemon derives locality from systemd-logind for the **requesting process** (via `SO_PEERCRED`, not from client claims): remote sessions are refused; on Linux ≥ 6.5 the requesting process is pinned with a pidfd (`SO_PEERPIDFD`), so a PID reused during the check cannot be mistaken for the requester; processes outside a session need a local seat session of the *real* uid and no remote session of that user (closes the `systemd-run --user` escape); the polkit helper service is only served while no remote session exists on the machine. `PAM_RHOST`/SSH variables are checked as an additional pre-filter. |
 | Local user probing other users' faces | Unprivileged callers may only authenticate/test/remove **themselves**; enrollment requires root (i.e. a password via sudo). |
 | Malformed requests | Line-limited JSON protocol, validated user names, PAM module catches panics and never returns success on error. |

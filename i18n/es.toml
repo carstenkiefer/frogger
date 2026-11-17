@@ -51,6 +51,7 @@
 "cli.doctor.policy" = "Política: RGB inseguro permitido: {rgb}, dispositivo sensible: {sensitive}"
 "cli.doctor.models_missing" = "Falta el archivo de modelo: {path}"
 "cli.doctor.emitter_dark" = "La imagen infrarroja es casi negra: probablemente el emisor IR está apagado. Configúrelo con linux-enable-ir-emitter e importe el resultado: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.virtual_camera" = "Cámara virtual ({reason}): se ignora, porque cualquier programa podría enviarle imágenes"
 "cli.doctor.other_face_module" = "Howdy también está activo en la configuración de PAM ({files}). Dos módulos faciales compiten por la cámara IR y se ejecutan uno tras otro: elimine Howdy (p. ej. sudo apt remove howdy) o desactive FROGGER."
 "cli.doctor.depth_found" = "Sensor de profundidad encontrado: {name} ({device}) – comprobación de profundidad experimental: {mode}"
 "cli.doctor.lid_closed" = "La tapa del portátil está cerrada – la cámara no puede verle."

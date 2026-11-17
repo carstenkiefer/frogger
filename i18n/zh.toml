@@ -51,6 +51,7 @@
 "cli.doctor.policy" = "策略：允许不安全的 RGB：{rgb}，敏感设备：{sensitive}"
 "cli.doctor.models_missing" = "缺少模型文件：{path}"
 "cli.doctor.emitter_dark" = "红外图像几乎全黑：红外发射器可能已关闭。请使用 linux-enable-ir-emitter 进行配置并导入结果：sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.virtual_camera" = "虚拟摄像头（{reason}）：已忽略，因为任何程序都可以向其输入图像"
 "cli.doctor.other_face_module" = "Howdy 也在 PAM 配置中处于启用状态（{files}）。两个面部模块争用红外摄像头并依次运行——请移除 Howdy（例如 sudo apt remove howdy）或禁用 FROGGER。"
 "cli.doctor.depth_found" = "已找到深度传感器：{name}（{device}）——实验性深度检查：{mode}"
 "cli.doctor.lid_closed" = "笔记本电脑的盖子已合上 – 摄像头看不到您。"

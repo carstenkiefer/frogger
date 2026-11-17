@@ -78,6 +78,10 @@ eye_model = false
 allow_insecure_rgb = false
 # Devices with sensitive data: forces IR + blink and forbids RGB entirely.
 sensitive_device = false
+# Allow virtual cameras (v4l2loopback, OBS, vivid, akvcam …). Any program can
+# feed such a camera arbitrary images, which defeats every liveness check.
+# Development and testing only; ignored when sensitive_device = true.
+allow_virtual_camera = false
 
 [models]
 detector = "/usr/share/frogger/models/face_detection_yunet_2023mar.onnx"

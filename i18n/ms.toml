@@ -51,6 +51,7 @@
 "cli.doctor.policy" = "Dasar: RGB tidak selamat dibenarkan: {rgb}, peranti sensitif: {sensitive}"
 "cli.doctor.models_missing" = "Fail model tiada: {path}"
 "cli.doctor.emitter_dark" = "Imej inframerah hampir hitam: pemancar IR berkemungkinan dimatikan. Konfigurasikannya dengan linux-enable-ir-emitter dan import hasilnya: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.virtual_camera" = "Kamera maya ({reason}): diabaikan, kerana mana-mana program boleh memasukkan imej ke dalamnya"
 "cli.doctor.other_face_module" = "Howdy juga aktif dalam konfigurasi PAM ({files}). Dua modul wajah berebut kamera IR dan berjalan satu demi satu – buang Howdy (cth. sudo apt remove howdy) atau lumpuhkan FROGGER."
 "cli.doctor.depth_found" = "Penderia kedalaman ditemui: {name} ({device}) – semakan kedalaman eksperimen: {mode}"
 "cli.doctor.lid_closed" = "Penutup komputer riba tertutup – kamera tidak dapat melihat anda."

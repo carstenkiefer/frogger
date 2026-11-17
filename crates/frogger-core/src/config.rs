@@ -39,6 +39,10 @@ pub struct CameraConfig {
     /// Optional "vendor:product" the device must report (camera pinning).
     /// Written by `frogger setup`; makes swapping in another camera fail.
     pub expected_usb_id: Option<String>,
+    /// Whether virtual cameras (v4l2loopback etc.) may be used. Not a config
+    /// key: derived from `policy.allow_virtual_camera` when loading.
+    #[serde(skip)]
+    pub allow_virtual: bool,
     /// Experimental: depth camera (e.g. Intel RealSense) as additional
     /// liveness evidence.
     pub depth: DepthConfig,
@@ -87,6 +91,7 @@ impl Default for CameraConfig {
             warmup_frames: 4,
             emitter: None,
             expected_usb_id: None,
+            allow_virtual: false,
             depth: DepthConfig::default(),
         }
     }
@@ -233,6 +238,11 @@ pub struct PolicyConfig {
     /// Mark this device as holding sensitive data. Forces IR + blink
     /// liveness and overrides `allow_insecure_rgb`.
     pub sensitive_device: bool,
+    /// Allow virtual cameras (v4l2loopback, vivid, akvcam …). Any program
+    /// with access to such a device can feed it arbitrary images, which
+    /// defeats every liveness check. For development and testing only;
+    /// ignored on sensitive devices.
+    pub allow_virtual_camera: bool,
 }
 
 #[derive(Clone, Debug, Serialize, Deserialize)]
@@ -261,9 +271,10 @@ impl Config {
     pub fn load(path: &Path) -> Result<Config> {
         match std::fs::read_to_string(path) {
             Ok(s) => {
-                let cfg: Config =
+                let mut cfg: Config =
                     toml::from_str(&s).with_context(|| format!("parsing {}", path.display()))?;
                 cfg.validate()?;
+                cfg.camera.allow_virtual = cfg.policy.allow_virtual_camera && !cfg.policy.sensitive_device;
                 Ok(cfg)
             }
             Err(e) if e.kind() == std::io::ErrorKind::NotFound => Ok(Config::default()),
