@@ -306,6 +306,7 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
             user,
             label,
             accept_insecure_rgb,
+            refine,
         } => {
             if peer.uid != 0 {
                 c.finish(AuthStatus::Denied, tr(lang, "cli.need_root", &[]));
@@ -337,9 +338,13 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
                 &mut emit,
                 &mut cue,
                 &cancel,
+                refine,
             );
             drop(engine);
-            log::info!("enrollment of {user}: {outcome:?}");
+            log::info!(
+                "{} of {user}: {outcome:?}",
+                if refine { "refinement" } else { "enrollment" }
+            );
             send_outcome(&mut c, outcome);
         }
         Op::List { user } => {

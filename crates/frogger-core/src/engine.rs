@@ -35,6 +35,10 @@ const MAX_ENROLL_SAMPLES: usize = 20;
 /// Give up looking for a face after this long.
 const STEP_LIMIT: Duration = Duration::from_secs(20);
 /// Hint "no face in view" after this long without a usable face.
+/// Unusable frames for this long trigger a live hint (closer, centre, dark).
+const LIVE_HINT_AFTER: Duration = Duration::from_millis(1500);
+/// The same live hint is repeated at most this often.
+const LIVE_HINT_REPEAT: Duration = Duration::from_secs(6);
 const NO_FACE_HINT: Duration = Duration::from_secs(3);
 /// Head turn: relative yaw (nose offset / eye distance, against the
 /// straight-ahead baseline) that counts as turned to one side.
@@ -51,6 +55,9 @@ const CLOSE_GRACE: Duration = Duration::from_millis(500);
 const CLOSED_RECORD: Duration = Duration::from_millis(1000);
 /// How long after the last detected face its position is still used to
 /// measure the eyes when the detector loses the face (closed eyes).
+/// Minimum similarity of refinement samples to the enrolled ones (glasses
+/// lower it noticeably; field test: 0.48–0.8).
+const REFINE_MIN_IDENTITY: f32 = 0.4;
 const EYES_ONLY_MAX: Duration = Duration::from_millis(1500);
 /// Eye calibration margin below which the close-eyes step is repeated
 /// (field values: 0.20–0.25 for clearly closed eyes, 0.10 when the frames
@@ -604,6 +611,10 @@ impl Engine {
             rejects.too_small += 1;
             return None; // too far away / too small for reliable features
         }
+        if outside_frame(&a.face, frame.image.width as f32, frame.image.height as f32) {
+            rejects.edge += 1;
+            return None;
+        }
         if infrared && a.face_brightness < self.cfg.liveness.min_ir_face_brightness {
             rejects.dark += 1;
             return None;
@@ -629,8 +640,9 @@ impl Engine {
         emit: Emit,
         cue: &mut dyn FnMut(Signal),
         cancel: Cancel,
+        refine: bool,
     ) -> Outcome {
-        let outcome = self.enroll_steps(user, label, accept_rgb, lang, emit, cue, cancel);
+        let outcome = self.enroll_steps(user, label, accept_rgb, lang, emit, cue, cancel, refine);
         // Every step ends at once when the client is gone; nobody is left
         // to tell, and nothing was saved.
         if cancel() && outcome != Outcome::Success {
@@ -667,6 +679,7 @@ impl Engine {
         emit: Emit,
         cue: &mut dyn FnMut(Signal),
         cancel: Cancel,
+        refine: bool,
     ) -> Outcome {
         let fingerprint = match self.models() {
             Ok(m) => m.fingerprint.as_str(),
@@ -674,6 +687,16 @@ impl Engine {
                 log::error!("enroll: {e:#}");
                 return Outcome::Unavailable(tr(lang, "auth.camera_unavailable", &[]));
             }
+        };
+        // `frogger refine`: add samples to an existing enrollment of the
+        // same model and camera type, keeping its eye calibration.
+        let refine_base = if refine {
+            match self.store.load(user) {
+                Ok(Some(t)) if t.model == fingerprint && t.eyes.is_some() => Some(t),
+                _ => return Outcome::Failure(tr(lang, "enroll.refine_none", &[("user", user)])),
+            }
+        } else {
+            None
         };
         let (mut cam, _) = match self.open_camera() {
             Ok(c) => c,
@@ -684,6 +707,12 @@ impl Engine {
         };
         let (kind, _evidence) = self.detect_kind(&mut cam);
         let infrared = kind == CameraKind::Infrared;
+        if refine_base
+            .as_ref()
+            .is_some_and(|t| t.camera_kind != kind_name(kind))
+        {
+            return Outcome::Failure(tr(lang, "enroll.refine_none", &[("user", user)]));
+        }
         if !infrared {
             if !self.cfg.rgb_permitted() {
                 return Outcome::Denied(tr(lang, "enroll.rgb_refused", &[]));
@@ -698,6 +727,8 @@ impl Engine {
         let mut rejects = Rejects::default();
         let mut hinted_no_face = false;
         let mut hinted_multi = false;
+        // Last live hint and when it was given (not repeated too often).
+        let mut last_hint: Option<(&'static str, Instant)> = None;
         // Frames without a usable face, by reason (diagnostics).
         let rejected = std::cell::Cell::new(Rejects::default());
         // Next usable frame, or None when `limit` has passed. Lit frames
@@ -711,6 +742,7 @@ impl Engine {
                         cue: &mut dyn FnMut(Signal)|
          -> Option<Seen> {
             let last_face = Instant::now();
+            let before = rejects;
             while since.elapsed() < limit && !cancel() {
                 let r = self.enroll_frame(cam, infrared, &mut strobe, &mut rejects);
                 rejected.set(rejects);
@@ -722,6 +754,17 @@ impl Engine {
                             hinted_multi = true;
                             emit(tr(lang, "enroll.multiple_faces", &[]));
                             cue(Signal::Say("enroll.multiple_faces"));
+                        }
+                        if last_face.elapsed() >= LIVE_HINT_AFTER {
+                            if let Some(key) = live_hint(&rejects.since(&before)) {
+                                let repeat = last_hint
+                                    .is_none_or(|(k, at)| k != key || at.elapsed() >= LIVE_HINT_REPEAT);
+                                if repeat {
+                                    last_hint = Some((key, Instant::now()));
+                                    emit(tr(lang, key, &[]));
+                                    cue(Signal::Say(key));
+                                }
+                            }
                         }
                         if !hinted_no_face && last_face.elapsed() >= NO_FACE_HINT {
                             hinted_no_face = true;
@@ -826,181 +869,206 @@ impl Engine {
         if worst < 0.6 {
             return Outcome::Failure(tr(lang, "enroll.inconsistent", &[]));
         }
+        // A refinement must come from the enrolled person.
+        if let Some(base) = &refine_base {
+            let identity = base
+                .samples
+                .iter()
+                .map(|s| vision::cosine(&s.embedding, &mean))
+                .fold(f32::NEG_INFINITY, f32::max);
+            log::info!("refinement of {user}: similarity to the enrolled samples {identity:.3}");
+            if identity < REFINE_MIN_IDENTITY {
+                return Outcome::Failure(tr(lang, "enroll.refine_mismatch", &[("user", user)]));
+            }
+        }
 
-        // Step 3: closed eyes, looking straight ahead. The open-eye
-        // reference comes from the frontal samples only: eye patches of a
-        // turned head differ too much and would hide closed eyes.
-        let open_eyes: Vec<EyePair> = frontal.iter().map(|s| s.eyes.clone()).collect();
-        let open_ref = EyePair {
-            left: average(&open_eyes.iter().map(|e| e.left.as_slice()).collect::<Vec<_>>()),
-            right: average(&open_eyes.iter().map(|e| e.right.as_slice()).collect::<Vec<_>>()),
-        };
-        // Weaker eye (both must look open) and stronger eye (both must look
-        // closed): a single noisy eye patch is neither open nor closed.
-        let eye_sim = |e: &EyePair| dot(&e.left, &open_ref.left).min(dot(&e.right, &open_ref.right));
-        let both_sim = |e: &EyePair| dot(&e.left, &open_ref.left).max(dot(&e.right, &open_ref.right));
-        // A low quantile instead of the minimum: a single blurred or
-        // misaligned sample must not drag the threshold down (field test:
-        // the minimum fell to -0.2, which closed eyes never reach).
-        let open_floor = low_quantile(open_eyes.iter().map(eye_sim).collect());
-        let closed_below = open_floor - CLOSED_MARGIN;
-        // Closed eyes lower the face embedding similarity noticeably (IR
-        // field test), and people move a little while their eyes are
-        // closed: looser identity and pose limits than for open eyes.
-        let usable = |a: &Analysis| {
-            vision::cosine(&a.embedding, &mean) >= CLOSED_MIN_IDENTITY
-                && (yaw(&a.face) - base_yaw).abs() < CLOSED_MAX_YAW
-        };
-        // Closed frames are kept across attempts: each was checked on its own.
-        let mut closed: Vec<(f32, EyePair)> = Vec::new();
-        let mut lowest = f32::INFINITY;
-        let (mut seen, mut other_person, mut turned_away, mut eyes_only) = (0u32, 0u32, 0u32, 0u32);
-        // Last usable face: the detector often loses a face with closed eyes
-        // (field test: about a third of the frames), so for a short time the
-        // eyes are measured where it was last.
-        let mut last: Option<(Instant, Box<Analysis>)> = None;
-        // Best eye calibration so far (highest margin).
-        let mut best: Option<EyeCalibration> = None;
-        let mut enough_closed = false;
-        let pipeline = match self.models() {
-            Ok(m) => &m.pipeline,
-            Err(_) => return Outcome::Unavailable(tr(lang, "auth.camera_unavailable", &[])),
-        };
-        let rejected_before = rejected.get();
-        for attempt in 0..CLOSE_TRIES {
-            let key = if attempt == 0 {
-                "enroll.close_eyes"
-            } else {
-                "enroll.close_again"
+        // Steps 3 and 4 (eye calibration) only for a new enrollment: a
+        // refinement keeps the user's calibration.
+        let eyes = if let Some(base) = &refine_base {
+            base.eyes.clone()
+        } else {
+            // Step 3: closed eyes, looking straight ahead. The open-eye
+            // reference comes from the frontal samples only: eye patches of a
+            // turned head differ too much and would hide closed eyes.
+            let open_eyes: Vec<EyePair> = frontal.iter().map(|s| s.eyes.clone()).collect();
+            let open_ref = EyePair {
+                left: average(&open_eyes.iter().map(|e| e.left.as_slice()).collect::<Vec<_>>()),
+                right: average(&open_eyes.iter().map(|e| e.right.as_slice()).collect::<Vec<_>>()),
             };
-            emit(tr(lang, key, &[]));
-            cue(Signal::Say(key));
-            flush(&mut cam);
-            let step = Instant::now();
-            let mut closed_since: Option<Instant> = None;
-            while let Some(seen_frame) = next(&mut cam, step, CLOSE_TRY, true, emit, cue) {
-                if step.elapsed() < CLOSE_GRACE {
-                    // Not measured yet, but the face position is remembered
-                    // (people often close their eyes while the prompt plays).
-                    if let Seen::Face(a) = seen_frame {
-                        if vision::cosine(&a.embedding, &mean) >= CLOSED_MIN_IDENTITY && usable(&a) {
-                            last = Some((Instant::now(), a));
-                        }
-                    }
-                    continue;
-                }
-                let a = match seen_frame {
-                    Seen::Face(a) => a,
-                    Seen::NoFace(img) => {
-                        let Some((_, prev)) = last.as_ref().filter(|(at, _)| at.elapsed() <= EYES_ONLY_MAX)
-                        else {
-                            continue;
-                        };
-                        let sample = pipeline.eye_sample(&img, prev);
-                        // Same place, same light: the face is still there.
-                        let ratio = sample.face_brightness / prev.face_brightness.max(1.0);
-                        if !(0.8..=1.25).contains(&ratio) {
-                            continue;
-                        }
-                        let sim = both_sim(&sample.eyes);
-                        lowest = lowest.min(sim);
-                        if sim < closed_below {
-                            eyes_only += 1;
-                            closed_since.get_or_insert_with(Instant::now);
-                            closed.push((sim, sample.eyes));
-                        }
-                        if closed_since.is_some_and(|t| t.elapsed() >= CLOSED_RECORD)
-                            && closed.len() >= MIN_CLOSED
-                        {
-                            break;
+            // Weaker eye (both must look open) and stronger eye (both must look
+            // closed): a single noisy eye patch is neither open nor closed.
+            let eye_sim = |e: &EyePair| dot(&e.left, &open_ref.left).min(dot(&e.right, &open_ref.right));
+            let both_sim = |e: &EyePair| dot(&e.left, &open_ref.left).max(dot(&e.right, &open_ref.right));
+            // A low quantile instead of the minimum: a single blurred or
+            // misaligned sample must not drag the threshold down (field test:
+            // the minimum fell to -0.2, which closed eyes never reach).
+            let open_floor = low_quantile(open_eyes.iter().map(eye_sim).collect());
+            let closed_below = open_floor - CLOSED_MARGIN;
+            // Closed eyes lower the face embedding similarity noticeably (IR
+            // field test), and people move a little while their eyes are
+            // closed: looser identity and pose limits than for open eyes.
+            let usable = |a: &Analysis| {
+                vision::cosine(&a.embedding, &mean) >= CLOSED_MIN_IDENTITY
+                    && (yaw(&a.face) - base_yaw).abs() < CLOSED_MAX_YAW
+            };
+            // Closed frames are kept across attempts: each was checked on its own.
+            let mut closed: Vec<(f32, EyePair)> = Vec::new();
+            let mut lowest = f32::INFINITY;
+            let (mut seen, mut other_person, mut turned_away, mut eyes_only) = (0u32, 0u32, 0u32, 0u32);
+            // Last usable face: the detector often loses a face with closed eyes
+            // (field test: about a third of the frames), so for a short time the
+            // eyes are measured where it was last.
+            let mut last: Option<(Instant, Box<Analysis>)> = None;
+            // Best eye calibration so far (highest margin).
+            let mut best: Option<EyeCalibration> = None;
+            let mut enough_closed = false;
+            let pipeline = match self.models() {
+                Ok(m) => &m.pipeline,
+                Err(_) => return Outcome::Unavailable(tr(lang, "auth.camera_unavailable", &[])),
+            };
+            let rejected_before = rejected.get();
+            for attempt in 0..CLOSE_TRIES {
+                let key = if attempt == 0 {
+                    "enroll.close_eyes"
+                } else {
+                    "enroll.close_again"
+                };
+                emit(tr(lang, key, &[]));
+                cue(Signal::Say(key));
+                flush(&mut cam);
+                let step = Instant::now();
+                let mut closed_since: Option<Instant> = None;
+                while let Some(seen_frame) = next(&mut cam, step, CLOSE_TRY, true, emit, cue) {
+                    if step.elapsed() < CLOSE_GRACE {
+                        // Not measured yet, but the face position is remembered
+                        // (people often close their eyes while the prompt plays).
+                        if let Seen::Face(a) = seen_frame {
+                            if vision::cosine(&a.embedding, &mean) >= CLOSED_MIN_IDENTITY && usable(&a) {
+                                last = Some((Instant::now(), a));
+                            }
                         }
                         continue;
                     }
-                };
-                seen += 1;
-                if vision::cosine(&a.embedding, &mean) < CLOSED_MIN_IDENTITY {
-                    other_person += 1;
+                    let a = match seen_frame {
+                        Seen::Face(a) => a,
+                        Seen::NoFace(img) => {
+                            let Some((_, prev)) =
+                                last.as_ref().filter(|(at, _)| at.elapsed() <= EYES_ONLY_MAX)
+                            else {
+                                continue;
+                            };
+                            let sample = pipeline.eye_sample(&img, prev);
+                            // Same place, same light: the face is still there.
+                            let ratio = sample.face_brightness / prev.face_brightness.max(1.0);
+                            if !(0.8..=1.25).contains(&ratio) {
+                                continue;
+                            }
+                            let sim = both_sim(&sample.eyes);
+                            lowest = lowest.min(sim);
+                            if sim < closed_below {
+                                eyes_only += 1;
+                                closed_since.get_or_insert_with(Instant::now);
+                                closed.push((sim, sample.eyes));
+                            }
+                            if closed_since.is_some_and(|t| t.elapsed() >= CLOSED_RECORD)
+                                && closed.len() >= MIN_CLOSED
+                            {
+                                break;
+                            }
+                            continue;
+                        }
+                    };
+                    seen += 1;
+                    if vision::cosine(&a.embedding, &mean) < CLOSED_MIN_IDENTITY {
+                        other_person += 1;
+                        continue;
+                    }
+                    if !usable(&a) {
+                        turned_away += 1;
+                        continue;
+                    }
+                    last = Some((Instant::now(), a.clone()));
+                    let sim = both_sim(&a.eyes);
+                    lowest = lowest.min(sim);
+                    if sim < closed_below {
+                        closed_since.get_or_insert_with(Instant::now);
+                        closed.push((sim, a.eyes.clone()));
+                    } else if eye_sim(&a.eyes) >= open_floor && closed.len() >= MIN_CLOSED {
+                        break; // eyes opened again after enough closed frames
+                    }
+                    if closed_since.is_some_and(|t| t.elapsed() >= CLOSED_RECORD)
+                        && closed.len() >= MIN_CLOSED
+                    {
+                        break;
+                    }
+                }
+                if closed.len() < MIN_CLOSED {
                     continue;
                 }
-                if !usable(&a) {
-                    turned_away += 1;
-                    continue;
+                log::info!(
+                    "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
+                     {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {:?}, \
+                     other identity {other_person}, head turned {turned_away}, closed at the last face \
+                     position {eyes_only})",
+                    closed.len(),
+                    rejected.get().since(&rejected_before)
+                );
+                // Only the clearest closed frames become the reference: frames
+                // taken while the lids were still moving would blur it.
+                closed.sort_by(|a, b| a.0.total_cmp(&b.0));
+                let keep = (closed.len().div_ceil(2)).max(MIN_CLOSED).min(closed.len());
+                let refs: Vec<EyePair> = closed.iter().take(keep).map(|(_, e)| e.clone()).collect();
+                let cal = EyeCalibration::from_samples(&open_eyes, &refs);
+                let margin = cal.as_ref().map_or(0.0, |c| c.margin);
+                enough_closed = true;
+                if cal.is_some() && best.as_ref().is_none_or(|b: &EyeCalibration| margin > b.margin) {
+                    best = cal;
                 }
-                last = Some((Instant::now(), a.clone()));
-                let sim = both_sim(&a.eyes);
-                lowest = lowest.min(sim);
-                if sim < closed_below {
-                    closed_since.get_or_insert_with(Instant::now);
-                    closed.push((sim, a.eyes.clone()));
-                } else if eye_sim(&a.eyes) >= open_floor && closed.len() >= MIN_CLOSED {
-                    break; // eyes opened again after enough closed frames
+                if margin >= ENROLL_MIN_MARGIN {
+                    break;
                 }
-                if closed_since.is_some_and(|t| t.elapsed() >= CLOSED_RECORD) && closed.len() >= MIN_CLOSED {
+                // Weak separation: usually frames taken while the eyes were
+                // still closing (field test with a strobing emitter, where few
+                // frames are lit). Try again with fresh frames.
+                log::info!("enrollment of {user}: eye calibration too weak (margin {margin:.3}), retrying");
+                closed.clear();
+            }
+            if !enough_closed {
+                log::info!(
+                    "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
+                     {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {:?}, \
+                     other identity {other_person}, head turned {turned_away}, closed at the last face \
+                     position {eyes_only})",
+                    closed.len(),
+                    rejected.get().since(&rejected_before)
+                );
+                return Outcome::Failure(tr(lang, "enroll.calibration_failed", &[]));
+            }
+            // Step 4: open the eyes again; wait until they are (so the
+            // verification does not start with closed eyes).
+            cue(Signal::Cue(Cue::EyesClosed));
+            emit(tr(lang, "enroll.open_eyes", &[]));
+            cue(Signal::Say("enroll.open_eyes"));
+            let step = Instant::now();
+            while let Some(a) = next(&mut cam, step, OPEN_WAIT, false, emit, cue).and_then(Seen::face) {
+                if usable(&a) && eye_sim(&a.eyes) >= open_floor {
                     break;
                 }
             }
-            if closed.len() < MIN_CLOSED {
-                continue;
-            }
-            log::info!(
-                "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
-                 {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {:?}, \
-                 other identity {other_person}, head turned {turned_away}, closed at the last face \
-                 position {eyes_only})",
-                closed.len(),
-                rejected.get().since(&rejected_before)
-            );
-            // Only the clearest closed frames become the reference: frames
-            // taken while the lids were still moving would blur it.
-            closed.sort_by(|a, b| a.0.total_cmp(&b.0));
-            let keep = (closed.len().div_ceil(2)).max(MIN_CLOSED).min(closed.len());
-            let refs: Vec<EyePair> = closed.iter().take(keep).map(|(_, e)| e.clone()).collect();
-            let cal = EyeCalibration::from_samples(&open_eyes, &refs);
-            let margin = cal.as_ref().map_or(0.0, |c| c.margin);
-            enough_closed = true;
-            if cal.is_some() && best.as_ref().is_none_or(|b: &EyeCalibration| margin > b.margin) {
-                best = cal;
-            }
-            if margin >= ENROLL_MIN_MARGIN {
-                break;
-            }
-            // Weak separation: usually frames taken while the eyes were
-            // still closing (field test with a strobing emitter, where few
-            // frames are lit). Try again with fresh frames.
-            log::info!("enrollment of {user}: eye calibration too weak (margin {margin:.3}), retrying");
-            closed.clear();
-        }
-        if !enough_closed {
-            log::info!(
-                "enrollment of {user}: {} closed samples (open floor {open_floor:.3}, closed below \
-                 {closed_below:.3}, lowest {lowest:.3}; frames analysed {seen}, without usable face {:?}, \
-                 other identity {other_person}, head turned {turned_away}, closed at the last face \
-                 position {eyes_only})",
-                closed.len(),
-                rejected.get().since(&rejected_before)
-            );
-            return Outcome::Failure(tr(lang, "enroll.calibration_failed", &[]));
-        }
-        // Step 4: open the eyes again; wait until they are (so the
-        // verification does not start with closed eyes).
-        cue(Signal::Cue(Cue::EyesClosed));
-        emit(tr(lang, "enroll.open_eyes", &[]));
-        cue(Signal::Say("enroll.open_eyes"));
-        let step = Instant::now();
-        while let Some(a) = next(&mut cam, step, OPEN_WAIT, false, emit, cue).and_then(Seen::face) {
-            if usable(&a) && eye_sim(&a.eyes) >= open_floor {
-                break;
-            }
-        }
-        let eyes = best;
+            best
+        };
         if eyes.is_none() && (self.cfg.effective_liveness() == LivenessMode::Blink || !infrared) {
             return Outcome::Failure(tr(lang, "enroll.calibration_failed", &[]));
         }
 
         // Merge with an existing template from the same model/camera type.
         let now = store::now();
-        let mut template = match self.store.load(user) {
-            Ok(Some(t)) if t.model == fingerprint && t.camera_kind == kind_name(kind) => t,
+        let existing = match refine_base {
+            Some(t) => Some(t),
+            None => self.store.load(user).ok().flatten(),
+        };
+        let mut template = match existing {
+            Some(t) if t.model == fingerprint && t.camera_kind == kind_name(kind) => t,
             _ => UserTemplate {
                 version: FORMAT_VERSION,
                 user: user.to_string(),
@@ -1116,12 +1184,15 @@ struct Rejects {
     no_face: u32,
     multiple: u32,
     too_small: u32,
+    /// Face partly outside the frame (too close or off-centre).
+    edge: u32,
     dark: u32,
 }
 
 impl Rejects {
     fn since(&self, before: &Rejects) -> Rejects {
         Rejects {
+            edge: self.edge - before.edge,
             capture: self.capture - before.capture,
             unlit: self.unlit - before.unlit,
             no_face: self.no_face - before.no_face,
@@ -1130,6 +1201,26 @@ impl Rejects {
             dark: self.dark - before.dark,
         }
     }
+}
+
+/// Whether more than a tenth of the face box lies outside the frame.
+fn outside_frame(f: &vision::detect::Face, width: f32, height: f32) -> bool {
+    let (mx, my) = (f.w * 0.1, f.h * 0.1);
+    f.x < -mx || f.y < -my || f.x + f.w > width + mx || f.y + f.h > height + my
+}
+
+/// Live hint when frames have been unusable for a while: the reason behind
+/// most of the recent rejections, if it is clear (at least three frames and
+/// half of them). No face and several faces have hints of their own.
+fn live_hint(recent: &Rejects) -> Option<&'static str> {
+    let reasons = [
+        (recent.too_small, "enroll.hint_closer"),
+        (recent.edge, "enroll.hint_center"),
+        (recent.dark, "enroll.hint_dark"),
+    ];
+    let total = recent.no_face + recent.multiple + recent.too_small + recent.edge + recent.dark;
+    let (count, key) = reasons.into_iter().max_by_key(|(n, _)| *n)?;
+    (count >= 3 && count * 2 >= total).then_some(key)
 }
 
 /// Horizontal head pose: nose offset from the midpoint of the eyes, relative
@@ -1200,6 +1291,33 @@ mod tests {
                 [65.0, 80.0],
             ],
         }
+    }
+
+    #[test]
+    fn live_hint_needs_a_clear_reason() {
+        let r = |too_small, edge, dark, no_face| Rejects {
+            too_small,
+            edge,
+            dark,
+            no_face,
+            ..Rejects::default()
+        };
+        assert_eq!(live_hint(&r(5, 0, 0, 1)), Some("enroll.hint_closer"));
+        assert_eq!(live_hint(&r(0, 4, 1, 0)), Some("enroll.hint_center"));
+        assert_eq!(live_hint(&r(0, 0, 3, 3)), Some("enroll.hint_dark"));
+        // Too few frames, or no clear majority.
+        assert_eq!(live_hint(&r(2, 0, 0, 0)), None);
+        assert_eq!(live_hint(&r(3, 0, 0, 7)), None);
+    }
+
+    #[test]
+    fn faces_partly_outside_the_frame_are_detected() {
+        let mut f = face(50.0);
+        assert!(!outside_frame(&f, 640.0, 360.0));
+        f.x = -30.0; // a third of the box is outside
+        assert!(outside_frame(&f, 640.0, 360.0));
+        f.x = -5.0; // within the tolerance
+        assert!(!outside_frame(&f, 640.0, 360.0));
     }
 
     #[test]

@@ -74,6 +74,14 @@ enum Cmd {
         #[arg(long)]
         accept_insecure_rgb: bool,
     },
+    /// Add samples to an existing enrollment – e.g. with glasses, in other
+    /// light or another position – without starting over
+    Refine {
+        user: Option<String>,
+        /// Describes the new samples, e.g. "glasses"
+        #[arg(long)]
+        label: Option<String>,
+    },
     /// Try to recognize a user and print scores (does not log in)
     Test { user: Option<String> },
     /// List enrolled users
@@ -207,7 +215,18 @@ fn run(cli: Cli, lang: &str) -> Result<()> {
             accept_insecure_rgb,
         } => {
             require_root(lang)?;
-            enroll(&cli.socket, target_user(user)?, label, accept_insecure_rgb, lang)
+            enroll(
+                &cli.socket,
+                target_user(user)?,
+                label,
+                accept_insecure_rgb,
+                false,
+                lang,
+            )
+        }
+        Cmd::Refine { user, label } => {
+            require_root(lang)?;
+            enroll(&cli.socket, target_user(user)?, label, false, true, lang)
         }
         Cmd::Test { user } => {
             let user = target_user(user)?;
@@ -326,13 +345,21 @@ fn reason_key(r: &str) -> &str {
     }
 }
 
-fn enroll(socket: &str, user: String, label: Option<String>, accept: bool, lang: &str) -> Result<()> {
+fn enroll(
+    socket: &str,
+    user: String,
+    label: Option<String>,
+    accept: bool,
+    refine: bool,
+    lang: &str,
+) -> Result<()> {
     let (status, message, _) = call(
         socket,
         Op::Enroll {
             user,
             label,
             accept_insecure_rgb: accept,
+            refine,
         },
         lang,
     )?;
@@ -422,7 +449,10 @@ fn record_trace(
         bail!("{message}");
     };
     // Written separately below, one frame per line.
-    let frames = trace.as_object_mut().and_then(|o| o.remove("frames")).unwrap_or_default();
+    let frames = trace
+        .as_object_mut()
+        .and_then(|o| o.remove("frames"))
+        .unwrap_or_default();
     let frames = frames.as_array().map(Vec::as_slice).unwrap_or_default();
     let header = serde_json::to_string(&trace)?;
     let mut out = header.trim_end_matches('}').to_string();
@@ -693,7 +723,7 @@ fn setup(config: &Path, socket: &str, accept_rgb: bool, no_enroll: bool, lang: &
     restart_daemon();
     // Enable PAM only once a face is enrolled successfully.
     if !no_enroll {
-        enroll(socket, target_user(None)?, None, accept, lang)?;
+        enroll(socket, target_user(None)?, None, accept, false, lang)?;
     }
     pam_toggle(true, lang)?;
     println!(

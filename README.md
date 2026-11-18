@@ -152,6 +152,8 @@ The installer finds the PAM module directory of the distribution, creates the
 | `frogger doctor` | Cameras, IR detection, policy, daemon and PAM status |
 | `sudo frogger setup` | Guided setup |
 | `sudo frogger enroll [user]` | (Re-)enroll a face |
+| `sudo frogger refine [user] [--label glasses]` | Add samples later – e.g. with glasses, in other light – without starting over |
+| `sudo frogger doctor --record FILE` | Record a measurement trace (no images) for a bug report |
 | `frogger test` | Try recognition, print similarity scores |
 | `frogger list` / `frogger remove` | Manage your face data |
 | `sudo frogger pam enable\|disable` | Toggle the PAM integration |
