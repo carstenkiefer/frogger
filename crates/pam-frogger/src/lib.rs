@@ -174,30 +174,77 @@ fn looks_remote(rhost: Option<&str>) -> bool {
             .any(|v| std::env::var_os(v).is_some())
 }
 
-/// Talk to the daemon; returns the terminal event.
+/// Signals that mean "the user wants to abort" (Ctrl+C, Ctrl+\\, the
+/// terminal closed, kill). sudo blocks SIGINT/SIGQUIT while PAM runs, so a
+/// Ctrl+C stays pending instead of interrupting us.
+const ABORT_SIGNALS: [c_int; 4] = [libc::SIGINT, libc::SIGQUIT, libc::SIGTERM, libc::SIGHUP];
+/// How often a waiting module checks for pending abort signals.
+const SIGNAL_POLL: Duration = Duration::from_millis(100);
+
+/// Whether an abort signal is pending for this thread or process. The
+/// signal stays pending: the application handles it after we return.
+fn abort_signal_pending() -> bool {
+    // SAFETY: sigpending fills a local, zero-initialised set.
+    unsafe {
+        let mut set: libc::sigset_t = std::mem::zeroed();
+        libc::sigemptyset(&mut set);
+        if libc::sigpending(&mut set) != 0 {
+            return false;
+        }
+        ABORT_SIGNALS.iter().any(|&sig| libc::sigismember(&set, sig) == 1)
+    }
+}
+
+/// Talk to the daemon; returns the terminal event. Returns early (closing
+/// the connection, which makes the daemon stop the camera) when the user
+/// aborts with Ctrl+C or the overall `timeout` passes.
 fn converse(
     socket: &str,
     req: &Request,
     timeout: Duration,
     mut on_info: impl FnMut(&str),
 ) -> Result<(AuthStatus, String), String> {
+    let deadline = std::time::Instant::now() + timeout;
     let mut s = UnixStream::connect(socket).map_err(|e| format!("connect {socket}: {e}"))?;
-    s.set_read_timeout(Some(timeout)).map_err(|e| e.to_string())?;
+    s.set_read_timeout(Some(SIGNAL_POLL)).map_err(|e| e.to_string())?;
     s.set_write_timeout(Some(Duration::from_secs(2)))
         .map_err(|e| e.to_string())?;
     s.write_all(&frogger_proto::to_line(req))
         .map_err(|e| e.to_string())?;
     let mut reader = BufReader::new(s.take(16 * MAX_LINE as u64));
+    let mut line = Vec::new();
     loop {
-        let mut line = Vec::new();
-        let n = reader.read_until(b'\n', &mut line).map_err(|e| e.to_string())?;
+        // On a read timeout, bytes read so far stay in `line`.
+        let n = match reader.read_until(b'\n', &mut line) {
+            Ok(n) => n,
+            Err(e)
+                if matches!(
+                    e.kind(),
+                    std::io::ErrorKind::WouldBlock | std::io::ErrorKind::TimedOut
+                ) =>
+            {
+                if abort_signal_pending() {
+                    return Err("aborted by the user (signal pending)".into());
+                }
+                if std::time::Instant::now() >= deadline {
+                    return Err("timeout waiting for the daemon".into());
+                }
+                if line.len() > MAX_LINE {
+                    return Err("oversized message".into());
+                }
+                continue;
+            }
+            Err(e) => return Err(e.to_string()),
+        };
         if n == 0 {
             return Err("daemon closed connection".into());
         }
         if line.len() > MAX_LINE {
             return Err("oversized message".into());
         }
-        match serde_json::from_slice::<Event>(&line).map_err(|e| e.to_string())? {
+        let event = serde_json::from_slice::<Event>(&line).map_err(|e| e.to_string())?;
+        line.clear();
+        match event {
             Event::Info { text } => on_info(&text),
             Event::Result { status, message, .. } => return Ok((status, message)),
             Event::Error { message } => return Err(message),
@@ -374,6 +421,47 @@ mod tests {
         assert_eq!(infos, vec!["look at the camera", "blink"]);
         let got = h.join().unwrap();
         assert!(matches!(got.op, Op::Authenticate { .. }));
+    }
+
+    #[test]
+    fn ctrl_c_while_sudo_blocks_sigint_ends_the_conversation() {
+        // A daemon that never answers; reports when the client hung up.
+        let path = std::env::temp_dir().join(format!("frogger-pam-{}-silent.sock", std::process::id()));
+        let _ = std::fs::remove_file(&path);
+        let l = UnixListener::bind(&path).unwrap();
+        let daemon = std::thread::spawn(move || {
+            let (s, _) = l.accept().unwrap();
+            let mut rest = Vec::new();
+            // Returns at EOF, i.e. when the module closed the connection.
+            let _ = (&s).read_to_end(&mut rest);
+        });
+        // Like sudo: SIGINT blocked, then the user presses Ctrl+C.
+        // SAFETY: signal mask and pending signal of this test thread only.
+        let (old, sigint) = unsafe {
+            let mut set: libc::sigset_t = std::mem::zeroed();
+            let mut old: libc::sigset_t = std::mem::zeroed();
+            libc::sigemptyset(&mut set);
+            libc::sigaddset(&mut set, libc::SIGINT);
+            libc::pthread_sigmask(libc::SIG_BLOCK, &set, &mut old);
+            libc::pthread_kill(libc::pthread_self(), libc::SIGINT);
+            (old, set)
+        };
+        let req = Request::new(Op::Status);
+        let started = std::time::Instant::now();
+        let r = converse(&path.to_string_lossy(), &req, Duration::from_secs(10), |_| {});
+        assert!(r.unwrap_err().contains("aborted"));
+        assert!(started.elapsed() < Duration::from_secs(2));
+        daemon.join().unwrap(); // the connection was closed
+                                // SAFETY: consume the pending SIGINT, restore the mask.
+        unsafe {
+            let zero = libc::timespec {
+                tv_sec: 0,
+                tv_nsec: 0,
+            };
+            libc::sigtimedwait(&sigint, std::ptr::null_mut(), &zero);
+            libc::pthread_sigmask(libc::SIG_SETMASK, &old, std::ptr::null_mut());
+        }
+        let _ = std::fs::remove_file(&path);
     }
 
     #[test]
