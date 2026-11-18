@@ -79,6 +79,8 @@
 "cli.pam.authselect" = "이 시스템은 authselect를 사용합니다. 사용자 지정 프로필을 만들고 system-auth의 auth 섹션 맨 위에 다음 줄을 추가하세요: {line}"
 "cli.pam.manual" = "자동 PAM 구성은 Debian/Ubuntu에서만 사용할 수 있습니다. /etc/pam.d에 있는 해당 파일의 auth 섹션 맨 위에 다음 줄을 추가하세요: {line}"
 "cli.test.ok" = "인식되었습니다 (최고 유사도 {score})."
+"cli.record.start" = "{seconds}초 동안 기록합니다({label}): 카메라를 보고 몇 번 눈을 깜빡이며 머리를 살짝 돌리세요. 측정값만 저장되며 이미지는 저장되지 않습니다."
+"cli.record.saved" = "{frames}개 프레임을 {path}에 저장했습니다(얼굴이 있는 프레임 {faces}개, 생체 확인 통과: {passed}). 이 파일에는 측정값만 있고 이미지나 얼굴 특징은 없으므로 이슈에 첨부할 수 있습니다."
 "cli.test.fail" = "인식되지 않았습니다: {reason} (최고 유사도 {score})."
 "cli.emitter.imported" = "IR 발광기 구성을 가져왔습니다 (제어 항목 {count}개 발견)."
 "cli.emitter.none" = "{path}에서 발광기 구성을 찾을 수 없습니다."

@@ -79,6 +79,8 @@
 "cli.pam.authselect" = "このシステムは authselect を使用しています。カスタムプロファイルを作成し、system-auth の auth セクションの先頭に次の行を追加してください: {line}"
 "cli.pam.manual" = "PAM の自動設定は Debian/Ubuntu でのみ利用できます。/etc/pam.d 内の該当ファイルの auth セクションの先頭に次の行を追加してください: {line}"
 "cli.test.ok" = "認識しました (最高類似度 {score})。"
+"cli.record.start" = "{seconds} 秒間記録します（{label}）：カメラを見て、数回まばたきし、頭を少し回してください。保存されるのは測定値のみで、画像は保存されません。"
+"cli.record.saved" = "{frames} フレームを {path} に保存しました（顔あり {faces} フレーム、生体検知の合格：{passed}）。このファイルには測定値のみが含まれ、画像や顔の特徴は含まれないため、issue に添付できます。"
 "cli.test.fail" = "認識できませんでした: {reason} (最高類似度 {score})。"
 "cli.emitter.imported" = "IR エミッターの設定をインポートしました ({count} 個の制御項目が見つかりました)。"
 "cli.emitter.none" = "{path} にエミッターの設定が見つかりません。"

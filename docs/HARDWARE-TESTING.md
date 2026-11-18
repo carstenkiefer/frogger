@@ -81,3 +81,30 @@ after testing.
 `journalctl -u frogger` logs the model load time; `frogger test` reports
 `elapsed_ms`. On slow ARM devices check that blinks are still detected
 (`blink_detected: true`) – eye frames are sampled between full analyses.
+
+## 7. Recording measurement traces
+
+`frogger doctor --record` records what the camera measures, frame by frame,
+so liveness checks can be developed and regression-tested on real hardware
+without collecting images:
+
+```bash
+sudo frogger doctor --record real.json --label real
+sudo frogger doctor --record glasses.json --label glasses
+sudo frogger doctor --record photo.json --label photo --seconds 20
+```
+
+During a recording, look at the camera, blink a few times and turn your head
+slightly; for attack scenarios hold the photo, print or screen in front of
+the camera instead. Useful labels: `real`, `glasses`, `dark`, `photo`,
+`ir-print`, `ir-print-cutout` (print with cut-out eyes held in front of a
+person), `screen`.
+
+A trace contains, per frame: time, brightness, whether the emitter was lit,
+the face box and five landmark positions, the similarity scores against
+your own template (identity, open/closed eye references), brightness
+statistics around both eyes (corneal glint) and the verdict of the real
+verifier. It contains **no images, no eye patches and no face features**
+(embeddings); no face can be reconstructed from it. Please attach traces to
+an issue together with the output of `frogger doctor` – especially traces of
+attack attempts on your hardware.

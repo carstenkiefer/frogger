@@ -79,6 +79,8 @@
 "cli.pam.authselect" = "此系统使用 authselect。请创建自定义配置文件，并在 system-auth 的 auth 部分顶部添加以下行：{line}"
 "cli.pam.manual" = "自动 PAM 配置仅适用于 Debian/Ubuntu。请在 /etc/pam.d 中相关文件的 auth 部分顶部添加以下行：{line}"
 "cli.test.ok" = "已识别（最佳相似度 {score}）。"
+"cli.record.start" = "录制 {seconds} 秒（{label}）：请看向摄像头，眨几次眼并轻微转动头部。只保存测量数据，不保存任何图像。"
+"cli.record.saved" = "已将 {frames} 帧保存到 {path}（{faces} 帧中有人脸，活体检测通过：{passed}）。该文件只包含测量数据，不含图像和面部特征，可以附加到 issue 中。"
 "cli.test.fail" = "未识别：{reason}（最佳相似度 {score}）。"
 "cli.emitter.imported" = "已导入红外发射器配置（找到 {count} 个控制项）。"
 "cli.emitter.none" = "在 {path} 中未找到发射器配置。"

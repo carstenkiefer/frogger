@@ -79,6 +79,8 @@
 "cli.pam.authselect" = "Ce système utilise authselect. Créez un profil personnalisé et ajoutez cette ligne au début de la section auth de system-auth : {line}"
 "cli.pam.manual" = "La configuration PAM automatique n'est disponible que sous Debian/Ubuntu. Ajoutez cette ligne au début de la section auth des fichiers concernés dans /etc/pam.d : {line}"
 "cli.test.ok" = "Reconnu (meilleure similarité {score})."
+"cli.record.start" = "Enregistrement de {seconds} s ({label}) : regardez la caméra, clignez des yeux plusieurs fois et tournez légèrement la tête. Seules des mesures sont enregistrées – aucune image."
+"cli.record.saved" = "{frames} images enregistrées dans {path} (visage dans {faces} images, détection du vivant réussie : {passed}). Le fichier ne contient que des mesures – ni images ni caractéristiques du visage – et peut être joint à un ticket."
 "cli.test.fail" = "Non reconnu : {reason} (meilleure similarité {score})."
 "cli.emitter.imported" = "Configuration de l'émetteur IR importée ({count} contrôles trouvés)."
 "cli.emitter.none" = "Aucune configuration d'émetteur trouvée dans {path}."

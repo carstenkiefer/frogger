@@ -80,6 +80,8 @@
 "cli.pam.authselect" = "Iyi sisitemu ikoresha authselect. Kora porofayili yihariye hanyuma wongere uyu murongo hejuru y'igice cya auth cya system-auth: {line}"
 "cli.pam.manual" = "Igenamiterere rya PAM ryikora riboneka kuri Debian/Ubuntu gusa. Ongeraho uyu murongo hejuru y'igice cya auth mu madosiye abigenewe ari muri /etc/pam.d: {line}"
 "cli.test.ok" = "Byamenyekanye (igipimo cyiza cyo gusa: {score})."
+"cli.record.start" = "Gufata amasegonda {seconds} ({label}): reba kamera, humbya inshuro nke nke kandi uhindukize umutwe gato. Habikwa ibipimo gusa – nta mashusho."
+"cli.record.saved" = "Amashusho {frames} yabitswe muri {path} (isura iri mu mashusho {faces}, isuzuma ry'ubuzima ryatsinzwe: {passed}). Dosiye irimo ibipimo gusa – nta mashusho cyangwa ibiranga isura – kandi ishobora komekwa ku kibazo (issue)."
 "cli.test.fail" = "Ntibyamenyekanye: {reason} (igipimo cyiza cyo gusa: {score})."
 "cli.emitter.imported" = "Igenamiterere ry'itara rya IR ryinjijwe (hagaragaye uburyo bwo kugenzura {count})."
 "cli.emitter.none" = "Nta genamiterere ry'itara rya IR ryabonetse muri {path}."

@@ -79,6 +79,8 @@
 "cli.pam.authselect" = "Mfumo huu unatumia authselect. Unda wasifu maalum na uongeze mstari huu juu ya sehemu ya auth ya system-auth: {line}"
 "cli.pam.manual" = "Usanidi wa PAM wa kiotomatiki unapatikana kwenye Debian/Ubuntu pekee. Ongeza mstari huu juu ya sehemu ya auth ya faili husika katika /etc/pam.d: {line}"
 "cli.test.ok" = "Imetambuliwa (ufanano bora {score})."
+"cli.record.start" = "Kurekodi sekunde {seconds} ({label}): tazama kamera, pepesa macho mara chache na geuza kichwa kidogo. Vipimo pekee vinahifadhiwa – hakuna picha."
+"cli.record.saved" = "Fremu {frames} zimehifadhiwa katika {path} (uso katika fremu {faces}, ukaguzi wa uhai umefaulu: {passed}). Faili lina vipimo pekee – hakuna picha wala sifa za uso – na linaweza kuambatishwa kwenye issue."
 "cli.test.fail" = "Haikutambuliwa: {reason} (ufanano bora {score})."
 "cli.emitter.imported" = "Usanidi wa kitoa-mwanga cha IR umeingizwa (vidhibiti {count} vimepatikana)."
 "cli.emitter.none" = "Hakuna usanidi wa kitoa-mwanga uliopatikana katika {path}."

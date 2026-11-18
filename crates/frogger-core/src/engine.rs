@@ -5,6 +5,7 @@
 use crate::auth::{FailReason, Observation, Progress, StrobeFilter, Verifier};
 use crate::camera::{self, Camera, CameraKind};
 use crate::config::{Config, DepthMode, LivenessMode};
+use crate::record;
 use crate::store::{self, Sample, Store, UserTemplate, FORMAT_VERSION};
 use crate::vision::eyes::{average, EyeCalibration, EyePair};
 use crate::vision::{self, Analysis, Image, Pipeline};
@@ -475,6 +476,102 @@ impl Engine {
             emit,
             cancel,
         )
+    }
+
+    /// Record a measurement trace for `seconds` (see [`crate::record`]):
+    /// every lit frame is analysed fully, unlit frames of a strobing
+    /// emitter are measured at the last face position. The real verifier
+    /// runs alongside, but nothing is granted.
+    pub fn record(&self, user: &str, seconds: u32, label: &str, cancel: Cancel) -> Result<record::Trace> {
+        let template = self.usable_template(user).map_err(|o| match o {
+            Outcome::Unavailable(m) | Outcome::Failure(m) | Outcome::Denied(m) => anyhow::anyhow!("{m}"),
+            Outcome::Success | Outcome::Cancelled { .. } => anyhow::anyhow!("unexpected state"),
+        })?;
+        let duration = Duration::from_secs(seconds.clamp(1, record::MAX_RECORD_SECS).into());
+        let (mut cam, mut kind) = self.open_camera()?;
+        let models = self.models()?;
+        let infrared = template.camera_kind == "infrared";
+        if infrared && kind == CameraKind::Unknown {
+            kind = CameraKind::Infrared;
+        }
+        let ir = infrared && kind != CameraKind::Rgb;
+        let mut verifier = Verifier::new(&self.cfg, &template, ir);
+        let mut strobe = StrobeFilter::default();
+        let mut last_face: Option<vision::Face> = None;
+        let mut frames = Vec::new();
+        let start = Instant::now();
+        while start.elapsed() < duration && !cancel() {
+            let Ok(frame) = cam.frame() else { continue };
+            let t = start.elapsed().as_secs_f32();
+            let lit = !(ir && strobe.is_off(frame.mean));
+            let analysis = if lit {
+                models.pipeline.analyse(&frame.image)?
+            } else {
+                None
+            };
+            let face = analysis.as_ref().map(|a| {
+                let f = &a.face;
+                record::FaceRecord {
+                    score: record::r3(f.score),
+                    faces: a.face_count,
+                    bbox: [f.x, f.y, f.w, f.h].map(record::r2),
+                    landmarks: f.landmarks.map(|p| p.map(record::r2)),
+                    brightness: record::r2(a.face_brightness),
+                    yaw: record::r3(yaw(f)),
+                    identity: record::r3(verifier.similarity(a)),
+                    eyes: template.eyes.as_ref().map(|cal| {
+                        cal.components(&a.eyes)
+                            .map(|(o, c)| [record::r3(o), record::r3(c)])
+                    }),
+                    eye_closed: a.eye_closed.map(|p| p.map(record::r3)),
+                }
+            });
+            if let Some(a) = &analysis {
+                last_face = Some(a.face.clone());
+            }
+            let glints = last_face.as_ref().map(|f| record::glints(&frame.image, f));
+            let verdict = verifier.feed(&Observation {
+                t,
+                chroma: frame.chroma,
+                analysis,
+                eyes_only: None,
+                emitter_off: !lit,
+                depth: None,
+            });
+            frames.push(record::FrameRecord {
+                t: record::r3(t),
+                mean: record::r2(frame.mean),
+                chroma: record::r2(frame.chroma),
+                lit,
+                face,
+                glints,
+                verdict: match verdict {
+                    Progress::Success { .. } => "Success".into(),
+                    p => format!("{p:?}"),
+                },
+            });
+        }
+        log::info!(
+            "recorded {} frames for {user} ({label}){}",
+            frames.len(),
+            if cancel() { ", cancelled" } else { "" }
+        );
+        Ok(record::Trace {
+            format: record::TRACE_FORMAT,
+            frogger: env!("CARGO_PKG_VERSION").into(),
+            label: label.chars().filter(|c| !c.is_control()).take(64).collect(),
+            camera: record::CameraMeta {
+                name: cam.info.name.clone(),
+                usb_id: cam.info.usb_id.clone(),
+                kind: kind_name(kind).into(),
+                width: cam.width,
+                height: cam.height,
+                fourcc: String::from_utf8_lossy(&cam.fourcc).into_owned(),
+            },
+            liveness: format!("{:?}", self.cfg.effective_liveness()).to_lowercase(),
+            eye_calibration: template.eyes.is_some(),
+            frames,
+        })
     }
 
     /// Next frame usable for enrollment: lit by the emitter, exactly one face,

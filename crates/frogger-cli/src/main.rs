@@ -42,7 +42,21 @@ struct Cli {
 #[derive(Subcommand)]
 enum Cmd {
     /// Check cameras, IR capability, policy, daemon and PAM integration
-    Doctor,
+    Doctor {
+        /// Record a measurement trace (no images) to FILE instead, e.g. to
+        /// attach it to an issue
+        #[arg(long, value_name = "FILE")]
+        record: Option<PathBuf>,
+        /// Length of the recording in seconds (1–60)
+        #[arg(long, default_value_t = 15, requires = "record")]
+        seconds: u32,
+        /// Scenario of the recording: real, glasses, photo, ir-print, screen …
+        #[arg(long, default_value = "real", requires = "record")]
+        label: String,
+        /// User whose template the scores refer to (default: the invoking user)
+        #[arg(long, requires = "record")]
+        user: Option<String>,
+    },
     /// Guided setup: pick the camera, enable PAM, enroll the invoking user
     Setup {
         /// Acknowledge that face login without an IR camera is insecure
@@ -176,7 +190,13 @@ fn call(socket: &str, op: Op, lang: &str) -> Result<(AuthStatus, String, Option<
 
 fn run(cli: Cli, lang: &str) -> Result<()> {
     match cli.cmd {
-        Cmd::Doctor => doctor(&cli.config, &cli.socket, lang),
+        Cmd::Doctor {
+            record: Some(path),
+            seconds,
+            label,
+            user,
+        } => record_trace(&cli.socket, &path, seconds, label, target_user(user)?, lang),
+        Cmd::Doctor { .. } => doctor(&cli.config, &cli.socket, lang),
         Cmd::Setup {
             accept_insecure_rgb,
             no_enroll,
@@ -375,6 +395,69 @@ fn detect_cameras(cfg: &Config) -> Detected {
     Detected {
         cameras,
         refused_virtual,
+    }
+}
+
+/// `frogger doctor --record`: let the daemon record a measurement trace
+/// and write it to `path`, one frame per line.
+fn record_trace(
+    socket: &str,
+    path: &Path,
+    seconds: u32,
+    label: String,
+    user: String,
+    lang: &str,
+) -> Result<()> {
+    let seconds = seconds.clamp(1, frogger_core::record::MAX_RECORD_SECS);
+    println!(
+        "{}",
+        tr(
+            lang,
+            "cli.record.start",
+            &[("seconds", &seconds.to_string()), ("label", &label)]
+        )
+    );
+    let (status, message, data) = call(socket, Op::Record { user, seconds, label }, lang)?;
+    let Some(mut trace) = data.filter(|_| status == AuthStatus::Success) else {
+        bail!("{message}");
+    };
+    // Written separately below, one frame per line.
+    let frames = trace
+        .as_object_mut()
+        .and_then(|o| o.remove("frames"))
+        .unwrap_or_default();
+    let frames = frames.as_array().map(Vec::as_slice).unwrap_or_default();
+    let header = serde_json::to_string(&trace)?;
+    let mut out = header.trim_end_matches('}').to_string();
+    out.push_str(",\"frames\":[\n");
+    let lines: Vec<String> = frames.iter().map(|f| f.to_string()).collect();
+    out.push_str(&lines.join(",\n"));
+    out.push_str("\n]}\n");
+    std::fs::write(path, out).with_context(|| format!("writing {}", path.display()))?;
+    hand_over(path);
+    let with_face = frames.iter().filter(|f| f.get("face").is_some()).count();
+    let passed = frames.iter().any(|f| f["verdict"] == "Success");
+    println!(
+        "{}",
+        tr(
+            lang,
+            "cli.record.saved",
+            &[
+                ("frames", &frames.len().to_string()),
+                ("faces", &with_face.to_string()),
+                ("path", &path.display().to_string()),
+                ("passed", if passed { "✔" } else { "✘" }),
+            ]
+        )
+    );
+    Ok(())
+}
+
+/// A file written as root via sudo belongs to the invoking user.
+fn hand_over(path: &Path) {
+    let id = |name: &str| std::env::var(name).ok().and_then(|v| v.parse::<u32>().ok());
+    if let (true, Some(uid), Some(gid)) = (is_root(), id("SUDO_UID"), id("SUDO_GID")) {
+        let _ = std::os::unix::fs::chown(path, Some(uid), Some(gid));
     }
 }
 

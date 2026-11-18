@@ -6,6 +6,7 @@ pub mod camera;
 pub mod config;
 pub mod crypto;
 pub mod engine;
+pub mod record;
 pub mod session;
 pub mod store;
 pub mod vision;

@@ -80,6 +80,8 @@
 "cli.pam.authselect" = "System egi ekozesa authselect. Kora profile yaawe ey'enjawuura, oyongyereho omurongo ogu ahaiguru y'ekicweka kya auth omuri system-auth: {line}"
 "cli.pam.manual" = "Configuration ya PAM ey'okwekora eri ahari Debian/Ubuntu yonka. Yongyeraho omurongo ogu ahaiguru y'ekicweka kya auth omu ma-file agarikukwataho omuri /etc/pam.d: {line}"
 "cli.test.ok" = "Kimanyirwe (okushushana okukuru: {score})."
+"cli.record.start" = "Nikukwata obwire bwa sekondi {seconds} ({label}): reeba kamera, humbya emirundi mike kandi ohindure omutwe kakye. Nibibiikwa ebipimo byonka – tihariho bishushani."
+"cli.record.saved" = "Ebishushani {frames} byabiikwa omu {path} (obumoso buri omu bishushani {faces}, okukyebera amagara kwahikiire: {passed}). Fayiro eine ebipimo byonka – tihariho bishushani nari ebiranga obumoso – kandi neebaasa kugatwa aha issue."
 "cli.test.fail" = "Tikimanyirwe: {reason} (okushushana okukuru: {score})."
 "cli.emitter.imported" = "Configuration y'etaara rya IR yareetwa (hareebeka controls {count})."
 "cli.emitter.none" = "Tihabonekire configuration y'etaara omuri {path}."
