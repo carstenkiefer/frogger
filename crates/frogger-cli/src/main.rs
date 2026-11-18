@@ -421,7 +421,8 @@ fn record_trace(
     let Some(mut trace) = data.filter(|_| status == AuthStatus::Success) else {
         bail!("{message}");
     };
-    let frames = trace["frames"].take();
+    // Written separately below, one frame per line.
+    let frames = trace.as_object_mut().and_then(|o| o.remove("frames")).unwrap_or_default();
     let frames = frames.as_array().map(Vec::as_slice).unwrap_or_default();
     let header = serde_json::to_string(&trace)?;
     let mut out = header.trim_end_matches('}').to_string();
