@@ -59,13 +59,62 @@ log you in**.
 
 ## Installation
 
-Download the package for your architecture from the
+### Package repository (recommended)
+
+FROGGER and the optional voice packages are available from a signed package
+repository, so updates arrive with the normal system updates. The
+repository always contains the newest release (currently pre-releases).
+
+**Debian / Ubuntu** (amd64, arm64):
+
+```bash
+sudo install -d -m 755 /etc/apt/keyrings
+```
+
+```bash
+curl -fsSL https://carstenkiefer.github.io/frogger/frogger.asc | sudo tee /etc/apt/keyrings/frogger.asc >/dev/null
+```
+
+```bash
+echo "deb [signed-by=/etc/apt/keyrings/frogger.asc] https://carstenkiefer.github.io/frogger/apt stable main" | sudo tee /etc/apt/sources.list.d/frogger.list
+```
+
+```bash
+sudo apt update && sudo apt install frogger
+```
+
+**Fedora / RHEL** (x86_64, aarch64):
+
+```bash
+sudo curl -fsSLo /etc/yum.repos.d/frogger.repo https://carstenkiefer.github.io/frogger/frogger.repo
+```
+
+```bash
+sudo dnf install frogger
+```
+
+dnf asks once to import the signing key; its fingerprint is shown on the
+[repository page](https://carstenkiefer.github.io/frogger/).
+
+Spoken prompts (optional, see below): `frogger-voice-de`,
+`frogger-voice-en`, … or all freely licensed languages at once with
+`frogger-voices-free`.
+
+### Manual download
+
+Alternatively download the package for your architecture from the
 [releases](https://github.com/carstenkiefer/frogger/releases) (or the CI
 artifacts) and run:
 
 ```bash
 sudo apt install ./frogger_*_amd64.deb
 ```
+
+```bash
+sudo dnf install ./frogger-*.x86_64.rpm
+```
+
+### Setup
 
 ```bash
 sudo frogger setup
@@ -98,11 +147,7 @@ and import the result (the daemon applies it itself afterwards):
 sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml
 ```
 
-### Fedora / RHEL
-
-```bash
-sudo dnf install ./frogger-*.x86_64.rpm
-```
+### Fedora / RHEL notes
 
 PAM is configured with `authselect` there; create a custom profile and add
 `auth [success=end default=ignore] pam_frogger.so` at the top of the `auth`
@@ -225,6 +270,8 @@ cargo test --workspace
 packaging/fetch-models.sh                         # downloads + verifies models
 packaging/build-packages.sh amd64 target/release  # needs dpkg-deb, rpmbuild
 ```
+
+Releases and the package repository: [docs/RELEASING.md](docs/RELEASING.md).
 
 ## Packaging decisions
 
