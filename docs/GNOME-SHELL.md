@@ -43,9 +43,10 @@ times, and recognition runs in the background with proper visual feedback.
 
 ## Daemon / PAM work needed first
 
-* Stop the camera immediately when the PAM client disconnects (the shell
-  cancels the face service when the password is submitted); today an
-  attempt runs until its time budget ends.
+* ~~Stop the camera immediately when the PAM client disconnects~~ – done
+  in 0.3: the daemon checks the connection once per frame and ends the
+  attempt (and frees the camera) at once. A cancelled attempt with a face
+  in view still counts towards the lockout.
 * A retry policy for the parallel service: start a new attempt when a face
   appears again, up to `auth.max_failures`.
 * Add `gdm-frogger` to the default `auth.services` and to

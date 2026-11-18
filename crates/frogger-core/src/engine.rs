@@ -88,11 +88,20 @@ pub enum Outcome {
     Failure(String),
     Unavailable(String),
     Denied(String),
+    /// The client went away (password typed, Ctrl+C, PAM timeout): the
+    /// camera was stopped. `face_seen`: a face was in view, so the attempt
+    /// still counts towards the lockout – otherwise cancelling just before
+    /// the timeout would allow unlimited tries with photos or lookalikes.
+    Cancelled {
+        face_seen: bool,
+    },
 }
 
 #[derive(Clone, Debug, Serialize)]
 pub struct AttemptReport {
     pub success: bool,
+    /// Stopped because the client went away.
+    pub cancelled: bool,
     pub reason: Option<FailReason>,
     pub stats: crate::auth::Stats,
     pub camera_kind: CameraKind,
@@ -144,6 +153,9 @@ const SPOKEN_FAILURES: [&str; 4] = [
 
 /// Callback for user-facing (already translated) progress messages.
 pub type Emit<'a> = &'a mut dyn FnMut(String);
+/// Polled once per camera frame: `true` stops the attempt (the client went
+/// away), so the camera and the engine are free again at once.
+pub type Cancel<'a> = &'a dyn Fn() -> bool;
 
 impl Engine {
     /// Load configuration, key and models (blocking).
@@ -235,10 +247,11 @@ impl Engine {
         timeout: Duration,
         lang: &str,
         emit: Emit,
+        cancel: Cancel,
     ) -> Result<AttemptReport> {
         let start = Instant::now();
         let (mut cam, kind) = self.open_camera()?;
-        self.attempt_on(&mut cam, kind, start, template, timeout, lang, emit)
+        self.attempt_on(&mut cam, kind, start, template, timeout, lang, emit, cancel)
     }
 
     /// Recognition attempt on an already open camera (enrollment verifies
@@ -253,6 +266,7 @@ impl Engine {
         timeout: Duration,
         lang: &str,
         emit: Emit,
+        cancel: Cancel,
     ) -> Result<AttemptReport> {
         let mut kind = kind;
         // Wait for a background model load only after the camera started.
@@ -272,7 +286,12 @@ impl Engine {
         let mut last_full: Option<(Instant, Analysis)> = None;
         let mut prompted_blink = false;
         let mut success = false;
+        let mut cancelled = false;
         while start.elapsed() < timeout {
+            if cancel() {
+                cancelled = true;
+                break;
+            }
             let frame = match cam.frame() {
                 Ok(f) => f,
                 Err(e) => {
@@ -354,7 +373,13 @@ impl Engine {
                 break;
             }
         }
-        if !success {
+        if cancelled {
+            log::info!(
+                "attempt for {} cancelled after {} ms: the client went away",
+                template.user,
+                start.elapsed().as_millis()
+            );
+        } else if !success {
             log::info!(
                 "attempt for {} without success: {:?}, stats {}",
                 template.user,
@@ -364,7 +389,8 @@ impl Engine {
         }
         Ok(AttemptReport {
             success,
-            reason: (!success).then(|| verifier.failure_reason()),
+            cancelled,
+            reason: (!success && !cancelled).then(|| verifier.failure_reason()),
             stats: verifier.stats.clone(),
             camera_kind: kind,
             elapsed_ms: start.elapsed().as_millis(),
@@ -372,7 +398,7 @@ impl Engine {
     }
 
     /// Full authentication flow for PAM (policy checks are done by the caller).
-    pub fn authenticate(&self, user: &str, service: &str, lang: &str, emit: Emit) -> Outcome {
+    pub fn authenticate(&self, user: &str, service: &str, lang: &str, emit: Emit, cancel: Cancel) -> Outcome {
         let template = match self.usable_template(user) {
             Ok(t) => t,
             Err(o) => return o,
@@ -386,8 +412,11 @@ impl Engine {
             emit(tr(lang, "auth.start_ir_only", &[]));
         }
         let timeout = Duration::from_secs_f32(self.cfg.timeout_for(service));
-        match self.attempt(&template, timeout, lang, emit) {
+        match self.attempt(&template, timeout, lang, emit, cancel) {
             Ok(r) if r.success => Outcome::Success,
+            Ok(r) if r.cancelled => Outcome::Cancelled {
+                face_seen: r.stats.frames_with_face > 0,
+            },
             Ok(r) => Outcome::Failure(tr(
                 lang,
                 r.reason.unwrap_or(FailReason::NotRecognized).message_key(),
@@ -430,13 +459,13 @@ impl Engine {
     }
 
     /// Diagnostic attempt that reports scores; never counts as a login.
-    pub fn test(&self, user: &str, lang: &str, emit: Emit) -> Result<AttemptReport> {
+    pub fn test(&self, user: &str, lang: &str, emit: Emit, cancel: Cancel) -> Result<AttemptReport> {
         let t = self.usable_template(user).map_err(|o| match o {
             Outcome::Unavailable(m) if m == "not enrolled" => {
                 anyhow::anyhow!("{}", tr(lang, "cli.not_enrolled", &[("user", user)]))
             }
             Outcome::Unavailable(m) | Outcome::Failure(m) | Outcome::Denied(m) => anyhow::anyhow!("{m}"),
-            Outcome::Success => anyhow::anyhow!("unexpected state"),
+            Outcome::Success | Outcome::Cancelled { .. } => anyhow::anyhow!("unexpected state"),
         })?;
         emit(tr(lang, "auth.start", &[]));
         self.attempt(
@@ -444,6 +473,7 @@ impl Engine {
             Duration::from_secs_f32(self.cfg.auth.timeout_secs),
             lang,
             emit,
+            cancel,
         )
     }
 
@@ -492,6 +522,7 @@ impl Engine {
 
     /// Interactive enrollment. `cue` receives audible signals (the person
     /// cannot read the terminal with closed eyes).
+    #[allow(clippy::too_many_arguments)]
     pub fn enroll(
         &self,
         user: &str,
@@ -500,8 +531,15 @@ impl Engine {
         lang: &str,
         emit: Emit,
         cue: &mut dyn FnMut(Signal),
+        cancel: Cancel,
     ) -> Outcome {
-        let outcome = self.enroll_steps(user, label, accept_rgb, lang, emit, cue);
+        let outcome = self.enroll_steps(user, label, accept_rgb, lang, emit, cue, cancel);
+        // Every step ends at once when the client is gone; nobody is left
+        // to tell, and nothing was saved.
+        if cancel() && outcome != Outcome::Success {
+            log::info!("enrollment of {user} cancelled: the client went away");
+            return Outcome::Cancelled { face_seen: false };
+        }
         match &outcome {
             Outcome::Success => cue(Signal::Say("enroll.done")),
             Outcome::Failure(text) | Outcome::Unavailable(text) | Outcome::Denied(text) => {
@@ -512,6 +550,7 @@ impl Engine {
                     cue(Signal::Say(key));
                 }
             }
+            Outcome::Cancelled { .. } => {}
         }
         cue(Signal::Cue(if outcome == Outcome::Success {
             Cue::Done
@@ -521,6 +560,7 @@ impl Engine {
         outcome
     }
 
+    #[allow(clippy::too_many_arguments)]
     fn enroll_steps(
         &self,
         user: &str,
@@ -529,6 +569,7 @@ impl Engine {
         lang: &str,
         emit: Emit,
         cue: &mut dyn FnMut(Signal),
+        cancel: Cancel,
     ) -> Outcome {
         let fingerprint = match self.models() {
             Ok(m) => m.fingerprint.as_str(),
@@ -573,7 +614,7 @@ impl Engine {
                         cue: &mut dyn FnMut(Signal)|
          -> Option<Seen> {
             let last_face = Instant::now();
-            while since.elapsed() < limit {
+            while since.elapsed() < limit && !cancel() {
                 let r = self.enroll_frame(cam, infrared, &mut strobe, &mut rejects);
                 rejected.set(rejects);
                 match r {
@@ -909,6 +950,7 @@ impl Engine {
                     timeout,
                     lang,
                     &mut prompted,
+                    cancel,
                 )
             };
             match result {

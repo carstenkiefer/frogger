@@ -21,8 +21,8 @@ fixes always come first.
 * Optional GNOME Shell extension (`frogger-gnome`): face recognition in
   parallel to the password field on the lock screen and in GDM – see
   [GNOME-SHELL.md](GNOME-SHELL.md).
-* Daemon: stop the camera as soon as the PAM client disconnects; retry
-  policy for the parallel service.
+* Daemon: retry policy for the parallel service. (Done: the camera stops
+  as soon as the PAM client disconnects.)
 * Optional confirmation after recognition (unlock only after a key press).
 
 **Enrollment**

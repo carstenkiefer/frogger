@@ -227,6 +227,20 @@ impl Conn {
     }
 }
 
+/// Whether the client has closed its end of the connection (PAM gave up,
+/// the password was typed, Ctrl+C). Non-blocking; cheap enough to ask once
+/// per camera frame.
+fn peer_gone(fd: std::os::fd::RawFd) -> bool {
+    let mut p = libc::pollfd {
+        fd,
+        events: libc::POLLRDHUP,
+        revents: 0,
+    };
+    // SAFETY: one valid pollfd, timeout 0 (never blocks).
+    let n = unsafe { libc::poll(&mut p, 1, 0) };
+    n > 0 && p.revents & (libc::POLLRDHUP | libc::POLLHUP | libc::POLLERR | libc::POLLNVAL) != 0
+}
+
 fn read_request(stream: &UnixStream) -> Result<Request> {
     stream.set_read_timeout(Some(Duration::from_secs(5)))?;
     let mut line = Vec::new();
@@ -304,6 +318,8 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
                 );
                 return Ok(());
             }
+            let fd = c.stream.as_raw_fd();
+            let cancel = || peer_gone(fd);
             let engine = d.engine.lock().unwrap_or_else(|p| p.into_inner());
             let conn = std::cell::RefCell::new(&mut c);
             let mut emit = |s: String| conn.borrow_mut().info(s);
@@ -313,7 +329,15 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
                     Signal::Say(key) => Event::Say { key: key.into() },
                 })
             };
-            let outcome = engine.enroll(&user, label, accept_insecure_rgb, lang, &mut emit, &mut cue);
+            let outcome = engine.enroll(
+                &user,
+                label,
+                accept_insecure_rgb,
+                lang,
+                &mut emit,
+                &mut cue,
+                &cancel,
+            );
             drop(engine);
             log::info!("enrollment of {user}: {outcome:?}");
             send_outcome(&mut c, outcome);
@@ -364,9 +388,10 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
                 c.finish(AuthStatus::Denied, tr(lang, "cli.not_permitted", &[]));
                 return Ok(());
             }
+            let fd = c.stream.as_raw_fd();
             let engine = d.engine.lock().unwrap_or_else(|p| p.into_inner());
             let mut emit = |s: String| c.info(s);
-            let r = engine.test(&user, lang, &mut emit);
+            let r = engine.test(&user, lang, &mut emit, &|| peer_gone(fd));
             drop(engine);
             match r {
                 Ok(report) => {
@@ -384,12 +409,24 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
     Ok(())
 }
 
+/// Lock face authentication for `user` after too many failures.
+fn lock_if_exhausted(l: &mut Lockout, cfg: &Config, user: &str) {
+    if l.failures >= cfg.auth.max_failures {
+        l.locked_until = Some(Instant::now() + Duration::from_secs(cfg.auth.lockout_secs));
+        log::warn!(
+            "face authentication for {user} locked for {}s",
+            cfg.auth.lockout_secs
+        );
+    }
+}
+
 fn send_outcome(c: &mut Conn, o: Outcome) {
     match o {
         Outcome::Success => c.finish(AuthStatus::Success, ""),
         Outcome::Failure(m) => c.finish(AuthStatus::Failure, m),
         Outcome::Unavailable(m) => c.finish(AuthStatus::Unavailable, m),
         Outcome::Denied(m) => c.finish(AuthStatus::Denied, m),
+        Outcome::Cancelled { .. } => {} // nobody is listening any more
     }
 }
 
@@ -467,9 +504,15 @@ fn authenticate(
         }
     }
 
+    let fd = c.stream.as_raw_fd();
     let engine = d.engine.lock().unwrap_or_else(|p| p.into_inner());
+    // The client may have given up while another request held the engine.
+    if peer_gone(fd) {
+        log::info!("face auth for {user} via {service} skipped: client gone before the camera started");
+        return;
+    }
     let mut emit = |s: String| c.info(s);
-    let outcome = engine.authenticate(user, service, lang, &mut emit);
+    let outcome = engine.authenticate(user, service, lang, &mut emit, &|| peer_gone(fd));
     drop(engine);
 
     let mut locks = d.lockouts.lock().unwrap_or_else(|p| p.into_inner());
@@ -489,14 +532,17 @@ fn authenticate(
                 "face authentication failed for {user} ({service}): {m} [{} consecutive]",
                 l.failures
             );
-            if l.failures >= cfg.auth.max_failures {
-                l.locked_until = Some(Instant::now() + Duration::from_secs(cfg.auth.lockout_secs));
-                log::warn!(
-                    "face authentication for {user} locked for {}s",
-                    cfg.auth.lockout_secs
-                );
-            }
+            lock_if_exhausted(l, &cfg, user);
             c.info(m.clone());
+        }
+        Outcome::Cancelled { face_seen: true } => {
+            l.failures += 1;
+            log::info!(
+                "face authentication for {user} ({service}) cancelled with a face in view: \
+                 counted as failure [{} consecutive]",
+                l.failures
+            );
+            lock_if_exhausted(l, &cfg, user);
         }
         _ => {}
     }
@@ -507,6 +553,18 @@ fn authenticate(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn a_closed_client_is_noticed() {
+        let (daemon_end, client_end) = UnixStream::pair().unwrap();
+        let fd = daemon_end.as_raw_fd();
+        assert!(!peer_gone(fd), "open connection");
+        // Events the daemon sent but the client never read do not matter.
+        (&daemon_end).write_all(b"{}\n").unwrap();
+        assert!(!peer_gone(fd), "unread data from the daemon");
+        drop(client_end);
+        assert!(peer_gone(fd), "client closed its end");
+    }
 
     #[test]
     fn peer_pidfd_identifies_the_connecting_process() {
