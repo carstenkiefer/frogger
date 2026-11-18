@@ -79,6 +79,8 @@
 "cli.pam.authselect" = "Sistem ini menggunakan authselect. Buat profil khusus dan tambahkan baris ini di bagian atas seksi auth pada system-auth: {line}"
 "cli.pam.manual" = "Konfigurasi PAM otomatis hanya tersedia di Debian/Ubuntu. Tambahkan baris ini di bagian atas seksi auth pada berkas terkait di /etc/pam.d: {line}"
 "cli.test.ok" = "Dikenali (kemiripan terbaik {score})."
+"cli.record.start" = "Merekam {seconds} dtk ({label}): lihat ke kamera, berkedip beberapa kali, dan putar kepala sedikit. Hanya hasil pengukuran yang disimpan – tanpa gambar."
+"cli.record.saved" = "{frames} frame disimpan ke {path} (wajah di {faces} frame, pemeriksaan keaktifan lolos: {passed}). Berkas hanya berisi hasil pengukuran – tanpa gambar dan ciri wajah – dan dapat dilampirkan ke issue."
 "cli.test.fail" = "Tidak dikenali: {reason} (kemiripan terbaik {score})."
 "cli.emitter.imported" = "Konfigurasi pemancar IR diimpor ({count} kontrol ditemukan)."
 "cli.emitter.none" = "Tidak ada konfigurasi pemancar yang ditemukan di {path}."

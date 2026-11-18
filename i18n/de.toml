@@ -79,6 +79,8 @@
 "cli.pam.authselect" = "Dieses System verwendet authselect. Ein eigenes Profil anlegen und diese Zeile am Anfang des auth-Abschnitts von system-auth einfügen: {line}"
 "cli.pam.manual" = "Die automatische PAM-Konfiguration gibt es nur unter Debian/Ubuntu. Diese Zeile am Anfang des auth-Abschnitts der betreffenden Dateien in /etc/pam.d einfügen: {line}"
 "cli.test.ok" = "Erkannt (beste Ähnlichkeit {score})."
+"cli.record.start" = "Aufnahme {seconds} s ({label}): in die Kamera schauen, ein paarmal blinzeln und den Kopf leicht drehen. Gespeichert werden nur Messwerte – keine Bilder."
+"cli.record.saved" = "{frames} Bilder gespeichert in {path} (Gesicht in {faces} Bildern, Lebenderkennung bestanden: {passed}). Die Datei enthält nur Messwerte – keine Bilder, keine Gesichtsmerkmale – und kann an ein Issue angehängt werden."
 "cli.test.fail" = "Nicht erkannt: {reason} (beste Ähnlichkeit {score})."
 "cli.emitter.imported" = "Konfiguration des IR-Strahlers importiert ({count} Steuerwerte gefunden)."
 "cli.emitter.none" = "Keine Strahler-Konfiguration in {path} gefunden."

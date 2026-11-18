@@ -383,6 +383,25 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
                 Err(e) => c.finish(AuthStatus::Unavailable, format!("{e:#}")),
             }
         }
+        Op::Record { user, seconds, label } => {
+            if !is_valid_username(&user) || !may_act_for(&user) {
+                c.finish(AuthStatus::Denied, tr(lang, "cli.not_permitted", &[]));
+                return Ok(());
+            }
+            let label: String = label
+                .chars()
+                .filter(|ch| ch.is_alphanumeric() || "-_ .".contains(*ch))
+                .take(64)
+                .collect();
+            let fd = c.stream.as_raw_fd();
+            let engine = d.engine.lock().unwrap_or_else(|p| p.into_inner());
+            let r = engine.record(&user, seconds, &label, &|| peer_gone(fd));
+            drop(engine);
+            match r {
+                Ok(trace) => c.finish_data(AuthStatus::Success, serde_json::to_value(&trace)?),
+                Err(e) => c.finish(AuthStatus::Unavailable, format!("{e:#}")),
+            }
+        }
         Op::Test { user } => {
             if !is_valid_username(&user) || !may_act_for(&user) {
                 c.finish(AuthStatus::Denied, tr(lang, "cli.not_permitted", &[]));

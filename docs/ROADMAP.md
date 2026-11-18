@@ -43,9 +43,10 @@ fixes always come first.
   a blink challenge alone does not stop.
 
 **Test data** (see [policy](#test-data-policy))
-* `frogger doctor --record`: records per-frame *measurements* (glint
-  position and brightness, landmark parallax residual, lit/unlit brightness
-  ratios, eye scores) as JSON, which testers can share safely.
+* ~~`frogger doctor --record`~~ (done): records per-frame *measurements*
+  (landmarks, eye scores, eye-region brightness for the glint check, lit and
+  unlit frames) as JSON, which testers can share safely – see
+  [HARDWARE-TESTING.md](HARDWARE-TESTING.md#7-recording-measurement-traces).
 * Liveness checks operate on these measurements, so regression tests run on
   recorded traces without images.
 * First synthetic sequences (freely licensed 3D heads under simulated IR

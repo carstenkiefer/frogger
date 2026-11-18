@@ -72,6 +72,15 @@ pub enum Op {
     /// Run the recognition pipeline without granting anything and report
     /// scores (root only, or own user).
     Test { user: String },
+    /// Record a measurement trace (no images) for `seconds` while the user
+    /// looks at the camera; returned as `data` of the result (root only, or
+    /// own user).
+    Record {
+        user: String,
+        seconds: u32,
+        #[serde(default)]
+        label: String,
+    },
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
