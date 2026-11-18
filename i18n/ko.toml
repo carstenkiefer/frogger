@@ -51,6 +51,7 @@
 "cli.doctor.policy" = "정책: 안전하지 않은 RGB 허용: {rgb}, 민감한 기기: {sensitive}"
 "cli.doctor.models_missing" = "모델 파일이 없습니다: {path}"
 "cli.doctor.emitter_dark" = "적외선 이미지가 거의 검은색입니다. IR 발광기가 꺼져 있는 것 같습니다. linux-enable-ir-emitter로 설정한 뒤 결과를 가져오세요: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.virtual_camera" = "가상 카메라({reason}): 어떤 프로그램이든 이미지를 넣을 수 있으므로 무시됩니다"
 "cli.doctor.other_face_module" = "Howdy도 PAM 구성에서 활성화되어 있습니다({files}). 두 얼굴 인식 모듈이 IR 카메라를 두고 경쟁하며 차례로 실행됩니다. Howdy를 제거하거나(예: sudo apt remove howdy) FROGGER를 비활성화하세요."
 "cli.doctor.depth_found" = "깊이 센서를 찾았습니다: {name} ({device}) – 실험적 깊이 검사: {mode}"
 "cli.doctor.lid_closed" = "노트북 덮개가 닫혀 있습니다 – 카메라가 사용자를 볼 수 없습니다."

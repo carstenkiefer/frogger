@@ -52,6 +52,7 @@
 "cli.doctor.policy" = "Ebiragiro: RGB etarinzirwe neikirizibwa: {rgb}, ekyoma ky'amakuru g'ebanga: {sensitive}"
 "cli.doctor.models_missing" = "File ya model tebonekire: {path}"
 "cli.doctor.emitter_dark" = "Ekishushani kya infrared nikiboneka nk'omwirima gwonka: etaara rya IR nirirabe rizimire. Ritegyeke okozesa linux-enable-ir-emitter, reero oreete ebirugiremu: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.virtual_camera" = "Kamera etari ya mazima ({reason}): teyetwirwa, ahabw'okuba purogaramu yoona neebaasa kugiteramu ebishushani"
 "cli.doctor.other_face_module" = "Howdy nayo neekora omuri PAM ({files}). Puroguraamu ibiri ezirikumanya obuso nizirwanira kamera ya IR kandi nizikora emwe enyima y'endiijo – iha Howdy (nk'oku sudo apt remove howdy) nari ohagarike FROGGER."
 "cli.doctor.depth_found" = "Sensor y'obuzima ezoorwa: {name} ({device}) – okukyebera obuzima okw'okugyezaho: {mode}"
 "cli.doctor.lid_closed" = "Laptop ekingire – kamera terikubaasa kukureeba."

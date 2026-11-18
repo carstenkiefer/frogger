@@ -51,6 +51,7 @@
 "cli.doctor.policy" = "Sera: RGB isiyo salama inaruhusiwa: {rgb}, kifaa nyeti: {sensitive}"
 "cli.doctor.models_missing" = "Faili ya modeli haipo: {path}"
 "cli.doctor.emitter_dark" = "Picha ya infraredi ni karibu nyeusi: huenda kitoa-mwanga cha IR kimezimwa. Kisanidi kwa linux-enable-ir-emitter kisha uingize matokeo: sudo frogger emitter import ~/.config/linux-enable-ir-emitter.toml"
+"cli.doctor.virtual_camera" = "Kamera pepe ({reason}): imepuuzwa, kwa sababu programu yoyote inaweza kuiingizia picha"
 "cli.doctor.other_face_module" = "Howdy pia imewashwa katika usanidi wa PAM ({files}). Moduli mbili za uso zinashindania kamera ya IR na kuendeshwa moja baada ya nyingine – ondoa Howdy (k.m. sudo apt remove howdy) au zima FROGGER."
 "cli.doctor.depth_found" = "Kihisi cha kina kimepatikana: {name} ({device}) – ukaguzi wa kina wa majaribio: {mode}"
 "cli.doctor.lid_closed" = "Mfuniko wa kompyuta mpakato umefungwa – kamera haiwezi kukuona."

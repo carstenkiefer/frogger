@@ -332,11 +332,18 @@ struct Detected {
         Vec<String>,
         Option<camera::CaptureStats>,
     )>,
+    /// Virtual cameras (v4l2loopback etc.), refused by policy: never opened.
+    refused_virtual: Vec<camera::CameraInfo>,
 }
 
 fn detect_cameras(cfg: &Config) -> Detected {
     let mut cameras = Vec::new();
+    let mut refused_virtual = Vec::new();
     for info in camera::list_cameras() {
+        if info.virtual_reason.is_some() && !cfg.camera.allow_virtual {
+            refused_virtual.push(info);
+            continue;
+        }
         if info.depth {
             // Depth nodes are reported separately and never used as camera.
             let ev = info.evidence.clone();
@@ -365,7 +372,10 @@ fn detect_cameras(cfg: &Config) -> Detected {
         };
         cameras.push((info, kind, ev, stats));
     }
-    Detected { cameras }
+    Detected {
+        cameras,
+        refused_virtual,
+    }
 }
 
 fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
@@ -409,6 +419,17 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
                 println!("      (!) {}", tr(lang, "cli.doctor.emitter_dark", &[]));
             }
         }
+    }
+    for info in &det.refused_virtual {
+        println!("  {} – {}", info.path.display(), info.name);
+        println!(
+            "      (!) {}",
+            tr(
+                lang,
+                "cli.doctor.virtual_camera",
+                &[("reason", info.virtual_reason.as_deref().unwrap_or_default())]
+            )
+        );
     }
     let ir = det.cameras.iter().find(|(_, k, _, _)| *k == CameraKind::Infrared);
     println!();
