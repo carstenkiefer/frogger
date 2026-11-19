@@ -1,0 +1,82 @@
+# Publishes a signed APT and DNF repository on GitHub Pages with the
+# packages of the newest FROGGER release and the newest frogger-voices
+# release. Runs after every release (CI on a v* tag), daily (to pick up new
+# voice releases) and on demand.
+#
+# Needs: Settings → Pages → Source "GitHub Actions", and the secret
+# REPO_SIGNING_KEY (ASCII-armoured private key without passphrase, used
+# only for this repository).
+name: Package repository
+
+on:
+  workflow_run:
+    workflows: [CI]
+    types: [completed]
+  schedule:
+    - cron: "17 4 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    name: Build repository
+    # After CI only for successful release builds (tags), not for branches.
+    if: >-
+      github.event_name != 'workflow_run' ||
+      (github.event.workflow_run.conclusion == 'success' &&
+       startsWith(github.event.workflow_run.head_branch, 'v'))
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+      - name: Tools
+        run: sudo apt-get update -qq && sudo apt-get install -y -qq apt-utils createrepo-c
+      - name: Download the newest release packages
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir -p in
+          for repo in "$GITHUB_REPOSITORY" carstenkiefer/frogger-voices; do
+            tag=$(gh release list --repo "$repo" --limit 1 --json tagName --jq '.[0].tagName')
+            gh release download "$tag" --repo "$repo" --dir in --pattern '*.deb' --pattern '*.rpm'
+            echo "* $repo: $tag" >> "$GITHUB_STEP_SUMMARY"
+          done
+          ls -l in
+      - name: Signing key
+        env:
+          REPO_SIGNING_KEY: ${{ secrets.REPO_SIGNING_KEY }}
+        run: |
+          if [ -z "$REPO_SIGNING_KEY" ]; then
+            echo "::error::Secret REPO_SIGNING_KEY is missing (see README, 'Package repository')"
+            exit 1
+          fi
+          export GNUPGHOME="$RUNNER_TEMP/gnupg"
+          install -d -m 700 "$GNUPGHOME"
+          printf '%s\n' "$REPO_SIGNING_KEY" | gpg --batch --import
+          echo "GNUPGHOME=$GNUPGHOME" >> "$GITHUB_ENV"
+      - name: Build repository
+        run: >-
+          packaging/build-repo.sh in site
+          "https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}"
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    name: Publish on GitHub Pages
+    needs: build
+    runs-on: ubuntu-24.04
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4
