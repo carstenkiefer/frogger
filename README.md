@@ -208,6 +208,7 @@ The installer finds the PAM module directory of the distribution, creates the
 | `frogger test` | Try recognition, print similarity scores |
 | `frogger list` / `frogger remove` | Manage your face data |
 | `sudo frogger pam enable\|disable` | Toggle the PAM integration |
+| `sudo frogger gnome enable\|disable` | Face login next to the password field (GNOME extension, package `frogger-gnome`) |
 
 ## Desktop integration
 
@@ -219,9 +220,22 @@ blink slowly – done. If recognition fails, the password prompt appears – aft
 at most 4 seconds (`auth.service_timeouts`), or after 2 seconds if nobody looks
 at the camera (`auth.no_face_timeout_secs`). The first login after boot always
 asks for the password so that the GNOME Keyring is unlocked
-(`require_password_for_first_login`). An optional GNOME Shell extension that
-runs face recognition *next to* the password field, like the fingerprint
-reader, is planned for 0.3 ([design notes](docs/GNOME-SHELL.md)).
+(`require_password_for_first_login`).
+
+**Experimental:** with the GNOME Shell extension, face recognition runs
+*next to* the password field, like a fingerprint reader – the password field
+is usable at all times (GNOME 46–50):
+
+```bash
+sudo apt install frogger-gnome
+```
+
+```bash
+sudo frogger gnome enable
+```
+
+Log out and in once afterwards. Details and test steps:
+[docs/GNOME-SHELL.md](docs/GNOME-SHELL.md).
 
 **KDE Plasma.** SDDM and the lock screen use `common-auth` as well. Plasma
 6.3/6.6 starts the PAM conversation of the lock screen when you press Enter on

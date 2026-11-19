@@ -12,7 +12,8 @@ url="https://github.com/carstenkiefer/frogger"
 license=('MIT OR Apache-2.0')
 depends=('glibc' 'gcc-libs' 'pam' 'systemd')
 makedepends=('cargo' 'clang')
-optdepends=('linux-enable-ir-emitter: switch on the IR emitter of cameras that need it')
+optdepends=('linux-enable-ir-emitter: switch on the IR emitter of cameras that need it'
+            'gnome-shell: face login next to the password field (frogger gnome enable)')
 install=frogger.install
 options=('!lto')
 source=("$pkgname-$_tag.tar.gz::$url/archive/refs/tags/v$_tag.tar.gz"
@@ -63,6 +64,8 @@ package() {
     > "$pkgdir/usr/lib/systemd/system/frogger.service"
   install -Dm644 packaging/systemd/frogger.socket "$pkgdir/usr/lib/systemd/system/frogger.socket"
   install -Dm644 packaging/sysusers.d/frogger.conf "$pkgdir/usr/lib/sysusers.d/frogger.conf"
+  install -Dm644 -t "$pkgdir/usr/share/gnome-shell/extensions/frogger@carstenkiefer.github.io" \
+    gnome/frogger@carstenkiefer.github.io/metadata.json gnome/frogger@carstenkiefer.github.io/extension.js
   install -Dm644 -t "$pkgdir/usr/share/doc/$pkgname" README.md SECURITY.md THIRD_PARTY.md
   install -Dm644 -t "$pkgdir/usr/share/licenses/$pkgname" LICENSE-MIT LICENSE-APACHE
 }

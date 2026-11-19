@@ -122,4 +122,9 @@ install -m755 "$ROOT/packaging/tarball/install.sh" "$ROOT/packaging/tarball/unin
 echo "$ARCH" > "$T/ARCH"
 echo "$GLIBC_MIN" > "$T/GLIBC_MIN"
 tar -C "$WORK/tar" --owner=0 --group=0 -czf "$OUT/$TARNAME.tar.gz" "$TARNAME"
+
+# ---- GNOME Shell extension (architecture independent, built once) ---------
+if [ "$ARCH" = amd64 ]; then
+  VERSION=$VERSION MAINTAINER=$MAINTAINER "$ROOT/packaging/build-gnome-package.sh" "$OUT"
+fi
 ls -l "$OUT"

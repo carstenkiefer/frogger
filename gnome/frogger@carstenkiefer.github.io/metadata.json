@@ -1,0 +1,9 @@
+{
+  "uuid": "frogger@carstenkiefer.github.io",
+  "name": "FROGGER face login",
+  "description": "Face authentication with FROGGER next to the password field on the lock screen and the login screen, like a fingerprint reader. Requires FROGGER (https://github.com/carstenkiefer/frogger) and 'frogger gnome enable'.",
+  "url": "https://github.com/carstenkiefer/frogger",
+  "shell-version": ["46", "47", "48", "49", "50"],
+  "session-modes": ["user", "unlock-dialog", "gdm"],
+  "version-name": "0.3"
+}
