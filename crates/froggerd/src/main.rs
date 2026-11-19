@@ -306,6 +306,7 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
             user,
             label,
             accept_insecure_rgb,
+            refine,
         } => {
             if peer.uid != 0 {
                 c.finish(AuthStatus::Denied, tr(lang, "cli.need_root", &[]));
@@ -337,9 +338,13 @@ fn handle(d: &Daemon, stream: UnixStream) -> Result<()> {
                 &mut emit,
                 &mut cue,
                 &cancel,
+                refine,
             );
             drop(engine);
-            log::info!("enrollment of {user}: {outcome:?}");
+            log::info!(
+                "{} of {user}: {outcome:?}",
+                if refine { "refinement" } else { "enrollment" }
+            );
             send_outcome(&mut c, outcome);
         }
         Op::List { user } => {
@@ -582,6 +587,13 @@ mod tests {
         (&daemon_end).write_all(b"{}\n").unwrap();
         assert!(!peer_gone(fd), "unread data from the daemon");
         drop(client_end);
+        // Other tests spawn processes in parallel: a child between fork and
+        // exec briefly holds a copy of every descriptor, so the socket may
+        // be released a moment after our close.
+        let deadline = Instant::now() + Duration::from_secs(2);
+        while !peer_gone(fd) && Instant::now() < deadline {
+            std::thread::sleep(Duration::from_millis(5));
+        }
         assert!(peer_gone(fd), "client closed its end");
     }
 

@@ -61,6 +61,10 @@ pub enum Op {
         /// Set when the operator explicitly acknowledged the RGB warning.
         #[serde(default)]
         accept_insecure_rgb: bool,
+        /// Add samples to the existing enrollment (e.g. with glasses) and
+        /// keep its eye calibration instead of starting over.
+        #[serde(default)]
+        refine: bool,
     },
     /// List enrolled users / models (root only, or own user).
     List {
