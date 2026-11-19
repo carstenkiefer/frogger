@@ -76,7 +76,7 @@ curl -fsSL https://carstenkiefer.github.io/frogger/frogger.asc | sudo tee /etc/a
 ```
 
 ```bash
-echo "deb [signed-by=/etc/apt/keyrings/frogger.asc] https://carstenkiefer.github.io/frogger/apt stable main" | sudo tee /etc/apt/sources.list.d/frogger.list
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/frogger.asc] https://carstenkiefer.github.io/frogger/apt stable main" | sudo tee /etc/apt/sources.list.d/frogger.list
 ```
 
 ```bash
