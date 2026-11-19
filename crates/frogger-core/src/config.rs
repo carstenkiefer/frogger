@@ -167,6 +167,7 @@ impl Default for AuthConfig {
             ],
             login_services: vec![
                 "gdm-password".into(),
+                "gdm-frogger".into(),
                 "sddm".into(),
                 "lightdm".into(),
                 "plasmalogin".into(),

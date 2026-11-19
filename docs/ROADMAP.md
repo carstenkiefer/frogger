@@ -18,11 +18,12 @@ fixes always come first.
   use only (Meta MMS).
 
 **GNOME**
-* Optional GNOME Shell extension (`frogger-gnome`): face recognition in
-  parallel to the password field on the lock screen and in GDM – see
-  [GNOME-SHELL.md](GNOME-SHELL.md).
-* Daemon: retry policy for the parallel service. (Done: the camera stops
-  as soon as the PAM client disconnects.)
+* ~~Optional GNOME Shell extension~~ (done, experimental): `frogger-gnome`
+  runs face recognition in parallel to the password field on the lock
+  screen and in GDM (PAM service `gdm-frogger`, two retries per prompt) –
+  see [GNOME-SHELL.md](GNOME-SHELL.md). Field test on GNOME 46 and 50
+  pending.
+* ~~Stop the camera as soon as the PAM client disconnects~~ (done).
 * Optional confirmation after recognition (unlock only after a key press).
 
 **Enrollment**
@@ -33,15 +34,20 @@ fixes always come first.
   (with glasses, different light, another position) without starting over;
   keeps the eye calibration and checks that the face matches.
 
-**Liveness hardening** (passive, no new models)
-* **Corneal glint check:** the IR emitter must produce a specular highlight
-  on both corneas that appears in lit frames and disappears in unlit frames
-  of a strobing emitter. A printed highlight stays visible without the
-  emitter.
-* **Parallax check:** during natural head movement, the landmarks of a flat
-  image follow a single planar transformation (homography); a real head does
-  not (nose vs. cheeks). Targets the "photo with cut-out eyes" attack, which
-  a blink challenge alone does not stop.
+**Liveness hardening** (no new models)
+* **Head-turn parallax (active, optional):** during a head turn the nose
+  tip moves differently from the plane of eyes and mouth corners; a flat
+  print cannot produce this. Field data (one laptop, three recordings): residual 0.10–0.18
+  eye distances for a real head turn vs. 0.02–0.06 noise. Without a head
+  turn there is no signal, so this becomes an optional challenge
+  (`liveness.mode = "blink+turn"`, automatic on sensitive devices), not a
+  passive check. Targets the "print with cut-out eyes" attack. Needs traces
+  of moved and bent prints before the threshold is fixed.
+* ~~Corneal glint check~~ (dropped for now): on a 640×360 IR camera the eye
+  is only a few pixels large and no corneal glint is measurable (traces:
+  peak 5 grey levels above the eye region); glasses produce strong
+  reflections that say nothing about liveness. Revisit for higher-resolution
+  cameras.
 
 **Test data** (see [policy](#test-data-policy))
 * ~~`frogger doctor --record`~~ (done): records per-frame *measurements*

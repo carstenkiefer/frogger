@@ -7,6 +7,7 @@ use frogger_core::config::{Config, CONFIG_PATH};
 use frogger_i18n::tr;
 use frogger_proto::{AuthStatus, Event, Op, Request, MAX_LINE, SOCKET_PATH};
 
+mod gnome;
 mod sound;
 use std::io::{BufRead, BufReader, Read, Write};
 use std::os::unix::net::UnixStream;
@@ -92,6 +93,12 @@ enum Cmd {
     Status,
     /// Enable or disable FROGGER in the system PAM configuration
     Pam {
+        #[arg(value_parser = ["enable", "disable", "status"])]
+        action: String,
+    },
+    /// Face login next to the password field on the GNOME login and lock
+    /// screen (needs the package frogger-gnome)
+    Gnome {
         #[arg(value_parser = ["enable", "disable", "status"])]
         action: String,
     },
@@ -303,6 +310,7 @@ fn run(cli: Cli, lang: &str) -> Result<()> {
             Ok(())
         }
         Cmd::Ssh { action } => ssh(&action, lang),
+        Cmd::Gnome { action } => gnome::run(&action, &cli.config, lang),
         Cmd::Emitter { path, .. } => {
             require_root(lang)?;
             let src =
@@ -659,6 +667,7 @@ fn doctor(config: &Path, socket: &str, lang: &str) -> Result<()> {
         || Path::new("/usr/sbin/gdm").exists()
     {
         println!("\n{}", tr(lang, "cli.desktop.gnome", &[]));
+        println!("{}", tr(lang, "cli.desktop.gnome_extension", &[]));
     }
     if desktop.contains("kde")
         || Path::new("/usr/bin/kscreenlocker_greet").exists()
