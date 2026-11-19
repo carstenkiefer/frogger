@@ -565,7 +565,7 @@ impl Engine {
         );
         Ok(record::Trace {
             format: record::TRACE_FORMAT,
-            frogger: env!("CARGO_PKG_VERSION").into(),
+            frogger: frogger_proto::version().into(),
             label: label.chars().filter(|c| !c.is_control()).take(64).collect(),
             camera: record::CameraMeta {
                 name: cam.info.name.clone(),

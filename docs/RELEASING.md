@@ -2,6 +2,10 @@
 
 ## A release
 
+Before tagging, in a pull request: `version` in `Cargo.toml` (the base of
+development builds, which sort before the release) and `_tag` in
+`packaging/arch/PKGBUILD`. Then:
+
 ```bash
 git checkout main && git pull
 git tag -a v0.3.0-alpha -m "FROGGER 0.3.0-alpha"
