@@ -3,7 +3,7 @@
 # Release workflow: set _tag, run `updpkgsums`, test with `makepkg -si`.
 
 pkgname=frogger
-_tag=0.2.0-alpha            # git tag without "v"
+_tag=0.3.0-alpha            # git tag without "v"
 pkgver=${_tag//-/}         # pacman versions cannot contain "-": 0.2.0alpha < 0.2.0
 pkgrel=1
 pkgdesc="Face authentication with IR cameras (Windows-Hello-like) for login, lock screen, sudo and polkit"

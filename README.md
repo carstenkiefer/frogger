@@ -93,8 +93,14 @@ sudo curl -fsSLo /etc/yum.repos.d/frogger.repo https://carstenkiefer.github.io/f
 sudo dnf install frogger
 ```
 
-dnf asks once to import the signing key; its fingerprint is shown on the
-[repository page](https://carstenkiefer.github.io/frogger/).
+dnf asks once to import the signing key. Its fingerprint:
+
+```
+6B55 E50D 98F5 7B69 C2E2  E0AE 8FDA ECCA 9C4D 3D6C
+```
+
+Compare it with `gpg --show-keys /etc/apt/keyrings/frogger.asc` (Debian/Ubuntu)
+or the prompt of dnf before you trust the key.
 
 Spoken prompts (optional, see below): `frogger-voice-de`,
 `frogger-voice-en`, … or all freely licensed languages at once with
