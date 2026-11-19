@@ -22,9 +22,16 @@ const SERVICE: &str = "gdm-frogger";
 const PAM_FILE: &str = "/etc/pam.d/gdm-frogger";
 const GDM_PASSWORD: &str = "/etc/pam.d/gdm-password";
 const MARKER: &str = "# Written by `frogger gnome enable`";
+// Fedora and upstream GDM: the greeter's dconf profile has a system
+// database "gdm" (compiled by `dconf update`).
 const DCONF_DB_DIR: &str = "/etc/dconf/db/gdm.d";
 const DCONF_KEYFILE: &str = "/etc/dconf/db/gdm.d/90-frogger";
 const DCONF_PROFILES: [&str; 2] = ["/etc/dconf/profile/gdm", "/usr/share/dconf/profile/gdm"];
+// Debian and Ubuntu: the greeter reads a file database that gdm.service
+// compiles from /usr/share/gdm/dconf/ on every start (generate-config).
+const DEBIAN_GDM_DCONF_DIR: &str = "/usr/share/gdm/dconf";
+const DEBIAN_GDM_KEYFILE: &str = "/usr/share/gdm/dconf/95-frogger";
+const DEBIAN_GENERATE: &str = "/usr/share/gdm/generate-config";
 
 pub fn run(action: &str, config: &Path, lang: &str) -> Result<()> {
     match action {
@@ -112,10 +119,7 @@ fn disable(config: &Path, lang: &str) -> Result<()> {
         set_list(doc, "login_services", &[], &[SERVICE]);
     })?;
     restart_daemon();
-    if Path::new(DCONF_KEYFILE).exists() {
-        std::fs::remove_file(DCONF_KEYFILE)?;
-        let _ = Command::new("dconf").arg("update").status();
-    }
+    enable_for_greeter(false);
     if let Ok(user) = target_user(None) {
         set_for_user(&user, false);
     }
@@ -138,7 +142,10 @@ fn status(config: &Path, lang: &str) -> Result<()> {
                     "service",
                     yes_no(cfg.service_allowed(SERVICE) && !cfg.service_allowed("gdm-password"))
                 ),
-                ("greeter", yes_no(Path::new(DCONF_KEYFILE).exists())),
+                (
+                    "greeter",
+                    yes_no(Path::new(DCONF_KEYFILE).exists() || Path::new(DEBIAN_GDM_KEYFILE).exists()),
+                ),
             ]
         )
     );
@@ -176,32 +183,43 @@ fn set_list(doc: &mut toml_edit::DocumentMut, key: &str, add: &[&str], remove: &
     doc["auth"][key] = toml_edit::value(arr);
 }
 
-/// Enable (or not) the extension on the GDM login screen through the dconf
-/// database of the greeter. Returns false when the distribution has no
-/// `gdm` dconf profile with a system database.
+fn greeter_keyfile() -> String {
+    format!("# Written by `frogger gnome enable`\n[org/gnome/shell]\nenabled-extensions=['{UUID}']\n")
+}
+
+/// Enable (or not) the extension on the GDM login screen. Returns false
+/// when the distribution's way of configuring the greeter is unknown.
 fn enable_for_greeter(on: bool) -> bool {
+    // Debian / Ubuntu
+    if Path::new(DEBIAN_GENERATE).exists() && Path::new(DEBIAN_GDM_DCONF_DIR).is_dir() {
+        let written = if on {
+            std::fs::write(DEBIAN_GDM_KEYFILE, greeter_keyfile()).is_ok()
+        } else {
+            !Path::new(DEBIAN_GDM_KEYFILE).exists() || std::fs::remove_file(DEBIAN_GDM_KEYFILE).is_ok()
+        };
+        // Takes effect when GDM starts next (it runs generate-config itself);
+        // compiling now keeps the database current already.
+        let _ = Command::new(DEBIAN_GENERATE).status();
+        return written;
+    }
+    // Fedora / upstream
     let has_db = DCONF_PROFILES
         .iter()
         .any(|p| std::fs::read_to_string(p).is_ok_and(|s| s.contains("system-db:gdm")));
     if !has_db {
         return false;
     }
-    let ok = if on {
+    let written = if on {
         std::fs::create_dir_all(DCONF_DB_DIR).is_ok()
-            && std::fs::write(
-                DCONF_KEYFILE,
-                format!(
-                    "# Written by `frogger gnome enable`\n[org/gnome/shell]\nenabled-extensions=['{UUID}']\n"
-                ),
-            )
-            .is_ok()
+            && std::fs::write(DCONF_KEYFILE, greeter_keyfile()).is_ok()
     } else {
-        std::fs::remove_file(DCONF_KEYFILE).is_ok()
+        !Path::new(DCONF_KEYFILE).exists() || std::fs::remove_file(DCONF_KEYFILE).is_ok()
     };
-    ok && Command::new("dconf")
-        .arg("update")
-        .status()
-        .is_ok_and(|s| s.success())
+    written
+        && Command::new("dconf")
+            .arg("update")
+            .status()
+            .is_ok_and(|s| s.success())
 }
 
 /// Add the extension to (or remove it from) `enabled-extensions` of `user`,
