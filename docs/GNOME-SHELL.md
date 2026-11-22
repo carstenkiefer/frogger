@@ -1,73 +1,83 @@
-# GNOME Shell integration (planned for 0.3)
+# GNOME: face login next to the password field
 
-Status: **design notes, not implemented.** Today FROGGER runs inside the
-`gdm-password` PAM service (see the README). This document describes the
-optional GNOME Shell extension planned for 0.3 and the reasons behind it.
+Status: **experimental (0.3).** Without the extension FROGGER runs inside the
+`gdm-password` PAM service (see the README): recognition runs *before* the
+password prompt, which appears after at most 4 s (2 s if nobody looks at the
+camera). The optional extension runs face recognition *in parallel* to the
+password field, the way GNOME runs a fingerprint reader.
 
-## Why an extension
+## Setup
 
-GDM and the GNOME lock screen only run their built-in authentication services
-(`gdm-password`, `gdm-fingerprint`, `gdm-smartcard`). Only fingerprint and
-smartcard run *in parallel* to the password field. Inside `gdm-password`,
-face recognition runs *before* the password prompt, so the password field
-appears only after recognition gave up (at most 4 s, 2 s if nobody looks at
-the camera – the improvements made in 0.2.x).
+```bash
+sudo apt install frogger-gnome        # Fedora: sudo dnf install frogger-gnome
+sudo frogger gnome enable
+```
 
-An extension can start an additional PAM service next to `gdm-password`, the
-way GNOME starts `gdm-fingerprint`: the password field is usable at all
-times, and recognition runs in the background with proper visual feedback.
+Then log out and in once (GNOME Shell only discovers new extensions at
+login); the login screen uses the extension after the next reboot.
+`frogger gnome status` shows the state, `sudo frogger gnome disable` (or
+removing the package) returns to the `gdm-password` path.
 
-## Plan
+## How it works
 
-* **Separate, optional package** `frogger-gnome` (architecture independent).
-  Without it everything keeps working via `gdm-password`; when a GNOME
-  release breaks the extension, users fall back to that path automatically.
-* **PAM service `/etc/pam.d/gdm-frogger`** containing only `pam_frogger.so`
-  (`auth requisite`, no password modules). `frogger pam enable` removes
-  FROGGER from `gdm-password` while the extension is active, so recognition
-  does not run twice.
-* **Extension** (session modes `unlock-dialog` and `gdm`) hooks into the
-  shell's user verifier and starts `gdm-frogger` together with
-  `gdm-password`. It shows a camera status (searching / blink / recognised /
-  failed) in the auth prompt and stops the service as soon as the password
-  is submitted.
-* **First login after boot** still requires the password (keyring); the
-  extension does not start the face service in that case. FROGGER will not
-  store the user's password to unlock the keyring – face login must never
-  reveal the password.
-* **Optional confirmation** (like Windows Hello's "automatically dismiss the
-  lock screen" switch): after recognition, unlock only after a key press,
-  so the screen does not unlock just because someone looks at it.
-* **Polkit dialogs** (GNOME's own polkit agent) are out of scope for the
-  first version; they keep using the sequential path.
+* **PAM service `/etc/pam.d/gdm-frogger`**, written by `frogger gnome enable`:
+  only `pam_frogger.so` in the auth stack; the account, session and password
+  stacks are copied from the system's `gdm-password`, so it matches every
+  distribution (Debian `common-*`, Fedora `password-auth`). GDM accepts
+  client-started services whose name begins with `gdm-`.
+* **Extension** `frogger@carstenkiefer.github.io` (session modes `user`,
+  `unlock-dialog`, `gdm`; GNOME 46–50). It hooks into the shell's user
+  verifier (`js/gdm/util.js`), which serves both the login and the lock
+  screen:
+  * starts `gdm-frogger` together with the password (and fingerprint)
+    service once the user is known;
+  * shows FROGGER's messages ("look at the camera", "blink") as hints below
+    the password field, like fingerprint hints;
+  * a failed face attempt never resets the prompt or counts as a failed
+    password; it is retried twice per prompt (1.5 s apart), then only the
+    password remains until the prompt resets;
+  * typing the password ends the face service; the daemon notices the closed
+    connection and stops the camera at once (0.3).
+* **Configuration:** `frogger gnome enable` replaces `gdm-password` by
+  `gdm-frogger` in `auth.services`, so recognition never runs twice.
+  `gdm-frogger` is a login service: the first login after boot still needs
+  the password (keyring).
+* **Login screen:** the extension is enabled for the GDM user through the
+  dconf database `gdm` (`/etc/dconf/db/gdm.d/90-frogger`). Distributions
+  without such a profile get a message explaining the manual step.
+* Everything security-relevant stays in PAM and the daemon. If the extension
+  fails (e.g. after a GNOME update), the password keeps working;
+  `sudo frogger gnome disable` restores the sequential path.
 
-## Daemon / PAM work needed first
+## Testing on a new GNOME version
 
-* ~~Stop the camera immediately when the PAM client disconnects~~ – done
-  in 0.3: the daemon checks the connection once per frame and ends the
-  attempt (and frees the camera) at once. A cancelled attempt with a face
-  in view still counts towards the lockout.
-* A retry policy for the parallel service: start a new attempt when a face
-  appears again, up to `auth.max_failures`.
-* Add `gdm-frogger` to the default `auth.services` and to
-  `auth.login_services`.
+1. Lock the screen, wake it, look at the camera and blink: unlocks without
+   touching the keyboard; the hint below the password field shows FROGGER's
+   prompt.
+2. Wake it, look away, type the password: unlocks; `journalctl -u frogger`
+   shows `cancelled … the client went away`.
+3. Wake it with nobody in front of the camera: after three short attempts
+   (about 10 s) the camera turns off; the password still works.
+4. Type a wrong password once: the prompt shakes as usual, face recognition
+   starts again.
+5. Reboot: the first login asks for the password; after locking, the face
+   works.
+6. `sudo frogger gnome disable`, log out and in: the sequential path
+   (`gdm-password`) works again.
 
-## Risks
+## Known limits
 
-* GNOME has no stable extension API. The auth prompt internals changed
-  between GNOME 48 (Debian 13), 50 (Ubuntu 26.04) and 51 (refactored auth
-  services for the new switchable authentication in GDM), so the extension
-  needs one code path per major version and testing for every GNOME release.
-* The extension runs inside the lock screen: errors there can block
-  unlocking. It must catch every exception and fall back to the password.
-* The extension must be enabled for the GDM greeter user via a dconf
-  profile, which differs between distributions (`gdm` vs `Debian-gdm`).
-* SELinux (Fedora): the GDM session worker must be allowed to connect to
-  `/run/frogger/frogger.sock`.
+* GNOME has no stable extension API. The verifier code the extension relies
+  on is identical in GNOME 46 and 50; each new major version must be checked
+  (`shell-version` in `metadata.json`).
+* GNOME's own polkit dialogs (Settings, Software) do not use the shell's
+  user verifier in the same way and keep using `polkit-1` sequentially.
+* Fedora/SELinux: the GDM session worker must be allowed to connect to
+  `/run/frogger/frogger.sock` – the same requirement as for `gdm-password`.
 
 ## Long term
 
 GDM is getting switchable authentication methods. A built-in "face" slot in
 GDM, like the one KDE Plasma 6.8 provides (`kde-face`), would make the
 extension unnecessary; FROGGER would then only ship a PAM file, as it does
-for KDE. Raising this with the GDM developers is part of the 0.3 work.
+for KDE.

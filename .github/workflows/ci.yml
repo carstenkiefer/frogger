@@ -45,6 +45,8 @@ jobs:
       - run: cargo fmt --all --check
       - run: cargo clippy --workspace --all-targets --locked -- -D warnings
       - run: cargo test --workspace --locked
+      - name: GNOME Shell extension
+        run: node gnome/test/extension.test.mjs
       - name: Model-based pipeline test
         run: |
           packaging/fetch-models.sh

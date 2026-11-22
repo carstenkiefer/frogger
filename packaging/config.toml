@@ -29,7 +29,7 @@ services = ["sudo", "sudo-i", "su", "polkit-1", "login", "gdm-password", "sddm",
             "plasmalogin", "kde", "kde-fingerprint", "kde-face", "frogger-test", "frogger-ssh"]
 # Display-manager services: the first login after boot requires the password
 # so that GNOME Keyring / KWallet can be unlocked.
-login_services = ["gdm-password", "sddm", "lightdm", "plasmalogin", "login"]
+login_services = ["gdm-password", "gdm-frogger", "sddm", "lightdm", "plasmalogin", "login"]
 require_password_for_first_login = true
 max_failures = 5
 lockout_secs = 300
